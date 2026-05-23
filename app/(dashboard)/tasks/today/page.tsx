@@ -1,0 +1,76 @@
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { CheckCircle2, Circle, Calendar, Flag } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export default async function TodayTasksPage() {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      userId: session.user.id,
+      dueDate: {
+        gte: today,
+        lt: tomorrow,
+      },
+    },
+    include: {
+      project: true,
+    },
+    orderBy: { priority: "desc" },
+  });
+
+  return (
+    <div className="flex h-full flex-col bg-white">
+      <div className="flex h-14 items-center border-b px-6">
+        <h1 className="text-lg font-semibold">Today</h1>
+      </div>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="mx-auto max-w-3xl space-y-4">
+          {tasks.length === 0 ? (
+            <div className="text-center text-muted-foreground mt-10">
+              No tasks due today. Enjoy your day!
+            </div>
+          ) : (
+            tasks.map(task => (
+              <div key={task.id} className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <button className="text-muted-foreground hover:text-primary">
+                    {task.isCompleted ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <Circle className="h-5 w-5" />}
+                  </button>
+                  <div>
+                    <div className={cn("font-medium", task.isCompleted && "text-muted-foreground line-through")}>
+                      {task.title}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex gap-2 mt-1">
+                      {task.project?.name && (
+                        <span className="bg-muted px-1.5 py-0.5 rounded text-primary/80">
+                          {task.project.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  {task.priority !== "NONE" && (
+                    <Flag className={cn("h-4 w-4", task.priority === "HIGH" ? "text-red-500" : task.priority === "MEDIUM" ? "text-yellow-500" : "text-blue-500")} />
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
