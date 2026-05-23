@@ -42,6 +42,41 @@ export async function createColumn(data: { name: string; position: number; proje
   }
 }
 
+export async function updateColumn(id: string, projectId: string, data: { name: string }) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const project = await prisma.project.findFirst({ where: { id: projectId, userId: session.user.id }});
+    if (!project) throw new Error("Not found");
+    const column = await prisma.taskColumn.update({
+      where: { id },
+      data: { name: data.name }
+    });
+    revalidatePath(`/tasks/${projectId}`);
+    return { success: true, data: column };
+  } catch (error) {
+    return { success: false, error: "Failed to update column" };
+  }
+}
+
+export async function deleteColumn(id: string, projectId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const project = await prisma.project.findFirst({ where: { id: projectId, userId: session.user.id }});
+    if (!project) throw new Error("Not found");
+    await prisma.taskColumn.delete({
+      where: { id }
+    });
+    revalidatePath(`/tasks/${projectId}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: "Failed to delete column" };
+  }
+}
+
 // Tasks
 export async function getTasks(projectId: string) {
   const session = await auth();
@@ -105,5 +140,55 @@ export async function deleteTask(id: string, projectId: string) {
     return { success: true };
   } catch (error) {
     return { success: false, error: "Failed to delete task" };
+  }
+}
+// Subtasks
+export async function createSubtask(data: { title: string; taskId: string; projectId: string; position: number }) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const subtask = await prisma.subtask.create({
+      data: {
+        title: data.title,
+        taskId: data.taskId,
+        position: data.position
+      }
+    });
+    revalidatePath(`/tasks/${data.projectId}`);
+    return { success: true, data: subtask };
+  } catch (error) {
+    return { success: false, error: "Failed to create subtask" };
+  }
+}
+
+export async function updateSubtask(id: string, projectId: string, data: Partial<any>) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const subtask = await prisma.subtask.update({
+      where: { id },
+      data
+    });
+    revalidatePath(`/tasks/${projectId}`);
+    return { success: true, data: subtask };
+  } catch (error) {
+    return { success: false, error: "Failed to update subtask" };
+  }
+}
+
+export async function deleteSubtask(id: string, projectId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    await prisma.subtask.delete({
+      where: { id }
+    });
+    revalidatePath(`/tasks/${projectId}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: "Failed to delete subtask" };
   }
 }

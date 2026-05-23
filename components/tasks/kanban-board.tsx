@@ -4,10 +4,12 @@ import { useState, useMemo } from "react";
 import { Task, TaskColumn, TaskPriority } from "@prisma/client";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskDetailSheet } from "./task-detail-sheet";
-import { updateTask, createTask, createColumn } from "@/app/actions/tasks";
-import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical } from "lucide-react";
+import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
+import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   DndContext,
@@ -33,6 +35,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+const COLUMN_COLORS = [
+  { bg: "bg-indigo-50/80", border: "border-t-indigo-500", text: "text-indigo-800" },
+  { bg: "bg-purple-50/80", border: "border-t-purple-500", text: "text-purple-800" },
+  { bg: "bg-pink-50/80", border: "border-t-pink-500", text: "text-pink-800" },
+  { bg: "bg-amber-50/80", border: "border-t-amber-500", text: "text-amber-800" },
+  { bg: "bg-emerald-50/80", border: "border-t-emerald-500", text: "text-emerald-800" },
+  { bg: "bg-cyan-50/80", border: "border-t-cyan-500", text: "text-cyan-800" },
+];
+
 function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -54,35 +65,39 @@ function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => 
     <div 
       ref={setNodeRef} 
       style={style} 
-      className="group relative flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+      className="group relative flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
       onClick={onClick}
     >
       <div className="flex items-start gap-2">
-        <div {...attributes} {...listeners} className="mt-0.5 cursor-grab text-muted-foreground/30 hover:text-muted-foreground">
+        <div {...attributes} {...listeners} className="mt-0.5 cursor-grab text-slate-300 hover:text-slate-500 transition-colors">
           <GripVertical className="h-4 w-4" />
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }} 
-          className="mt-0.5 text-muted-foreground hover:text-primary"
+          className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
         >
-          {task.isCompleted ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Circle className="h-4 w-4" />}
+          {task.isCompleted ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <Circle className="h-5 w-5" />}
         </button>
-        <span className={cn("flex-1", task.isCompleted && "text-muted-foreground line-through")}>
+        <span className={cn("flex-1 font-semibold text-[15px] leading-snug text-slate-800", task.isCompleted && "text-slate-400 line-through")}>
           {task.title}
         </span>
       </div>
       
       {(task.dueDate || task.priority !== "NONE") && (
-        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground pl-10">
+        <div className="mt-2 flex items-center gap-2 pl-8 flex-wrap">
           {task.dueDate && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-medium text-slate-500">
               <Calendar className="h-3 w-3" />
-              {new Date(task.dueDate).toLocaleDateString()}
+              {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </div>
           )}
           {task.priority !== "NONE" && (
-            <div className="flex items-center gap-1">
-              <Flag className={cn("h-3 w-3", task.priority === "HIGH" ? "text-red-500" : task.priority === "MEDIUM" ? "text-yellow-500" : "text-blue-500")} />
+            <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-bold", 
+              task.priority === "HIGH" ? "bg-red-50 border-red-100 text-red-600" : 
+              task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" : 
+              "bg-blue-50 border-blue-100 text-blue-600"
+            )}>
+              <Flag className="h-3 w-3" /> {task.priority}
             </div>
           )}
         </div>
@@ -91,7 +106,7 @@ function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => 
   );
 }
 
-function SortableColumn({ column, tasks, onAddTask, onToggleTask, onTaskClick }: any) {
+function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskClick, onRename, onDelete }: any) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: column.id,
     data: { type: "Column", column },
@@ -104,20 +119,37 @@ function SortableColumn({ column, tasks, onAddTask, onToggleTask, onTaskClick }:
 
   const taskIds = useMemo(() => tasks.map((t: Task) => t.id), [tasks]);
 
+  const colors = COLUMN_COLORS[index % COLUMN_COLORS.length];
+
   if (isDragging) {
     return <div ref={setNodeRef} style={style} className="flex w-80 flex-shrink-0 flex-col rounded-xl border-2 border-primary/50 bg-primary/10 opacity-50 p-3 h-full" />;
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="flex w-80 flex-shrink-0 flex-col rounded-xl bg-muted/40 border p-3 h-full">
-      <div className="mb-3 flex items-center justify-between font-semibold" {...attributes} {...listeners}>
-        <div className="flex items-center gap-2 cursor-grab">
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
+    <div ref={setNodeRef} style={style} className={cn("flex w-80 flex-shrink-0 flex-col rounded-xl border-t-[4px] p-4 h-full shadow-sm", colors.bg, colors.border)}>
+      <div className="mb-4 flex items-center justify-between">
+        <div className={cn("flex items-center gap-2 cursor-grab font-bold tracking-wide", colors.text)} {...attributes} {...listeners}>
+          <GripVertical className="h-4 w-4 opacity-50" />
           <span>{column.name}</span>
         </div>
-        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-          {tasks.length}
-        </span>
+        <div className="flex items-center gap-1">
+          <Badge variant="outline" className={cn("bg-white shadow-sm font-semibold mr-1", colors.text)}>
+            {tasks.length}
+          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onRename(column)}>
+                <Edit2 className="h-4 w-4 mr-2" /> Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDelete(column.id)} className="text-red-600">
+                <Trash2 className="h-4 w-4 mr-2" /> Delete Section
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto no-scrollbar pb-2">
@@ -210,6 +242,20 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
     }
   };
 
+  const handleRenameColumn = async (column: TaskColumn) => {
+    const newName = prompt("Rename section:", column.name);
+    if (!newName || newName === column.name) return;
+    setColumns(prev => prev.map(c => c.id === column.id ? { ...c, name: newName } : c));
+    await updateColumn(column.id, projectId, { name: newName });
+  };
+
+  const handleDeleteColumn = async (columnId: string) => {
+    if (!confirm("Are you sure you want to delete this section? All tasks inside will be deleted too.")) return;
+    setColumns(prev => prev.filter(c => c.id !== columnId));
+    setTasks(prev => prev.filter(t => t.columnId !== columnId));
+    await deleteColumn(columnId, projectId);
+  };
+
   const toggleTaskCompletion = async (taskId: string, isCompleted: boolean) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: !isCompleted } : t));
     await updateTask(taskId, projectId, { isCompleted: !isCompleted });
@@ -248,7 +294,7 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
         
         if (tasks[activeIndex].columnId !== tasks[overIndex].columnId) {
           const newTasks = [...tasks];
-          newTasks[activeIndex].columnId = newTasks[overIndex].columnId;
+          newTasks[activeIndex] = { ...newTasks[activeIndex], columnId: newTasks[overIndex].columnId };
           return arrayMove(newTasks, activeIndex, overIndex);
         }
         return arrayMove(tasks, activeIndex, overIndex);
@@ -260,7 +306,7 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
       setTasks(tasks => {
         const activeIndex = tasks.findIndex(t => t.id === activeId);
         const newTasks = [...tasks];
-        newTasks[activeIndex].columnId = overId as string;
+        newTasks[activeIndex] = { ...newTasks[activeIndex], columnId: overId as string };
         return arrayMove(newTasks, activeIndex, activeIndex);
       });
     }
@@ -274,27 +320,25 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
     if (!over) return;
     const activeId = active.id;
     const overId = over.id;
-    if (activeId === overId) return;
 
     // Handle Column sorting
     if (active.data.current?.type === "Column") {
+      if (activeId === overId) return;
       const activeColumnIndex = columns.findIndex(c => c.id === activeId);
       const overColumnIndex = columns.findIndex(c => c.id === overId);
       const newColumns = arrayMove(columns, activeColumnIndex, overColumnIndex);
       setColumns(newColumns);
-      // Note: Ideally persist column order here
       return;
     }
 
     // Handle Task sorting
     if (active.data.current?.type === "Task") {
-      // Find the task that was moved
       const movedTask = tasks.find(t => t.id === activeId);
       if (movedTask) {
-        // Persist the new columnId and order (position)
-        await updateTask(movedTask.id, projectId, { 
+        const position = tasks.filter(t => t.columnId === movedTask.columnId).findIndex(t => t.id === activeId);
+        updateTask(movedTask.id, projectId, { 
           columnId: movedTask.columnId,
-          // position could be handled if we update the backend to take array ordering
+          position: position >= 0 ? position : 0
         });
       }
     }
@@ -304,6 +348,7 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
 
   return (
     <DndContext
+      id="tasks-dnd-context"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={onDragStart}
@@ -312,14 +357,17 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
     >
       <div className="flex h-full gap-4 overflow-x-auto p-4 pb-8 items-start">
         <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
-          {columns.map(column => (
+          {columns.map((column, index) => (
             <SortableColumn 
               key={column.id} 
               column={column} 
+              index={index}
               tasks={tasks.filter(t => t.columnId === column.id)} 
               onAddTask={handleAddTask}
               onToggleTask={toggleTaskCompletion}
               onTaskClick={setSelectedTask}
+              onRename={handleRenameColumn}
+              onDelete={handleDeleteColumn}
             />
           ))}
         </SortableContext>
@@ -360,6 +408,8 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
             onAddTask={() => {}}
             onToggleTask={() => {}}
             onTaskClick={() => {}}
+            onRename={() => {}}
+            onDelete={() => {}}
           />
         )}
         {activeTask && (

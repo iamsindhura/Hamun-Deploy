@@ -37,8 +37,10 @@ export default async function ProjectTasksPage({
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="flex h-14 items-center border-b px-6">
-        <h1 className="text-lg font-semibold">{project.name}</h1>
+      <div className="flex h-16 items-center border-b px-8 bg-slate-50/50">
+        <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+          {project.name}
+        </h1>
       </div>
       <div className="flex-1 overflow-hidden">
         <KanbanBoard projectId={projectId} initialColumns={columns} initialTasks={tasks} />

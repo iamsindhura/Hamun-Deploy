@@ -15,26 +15,20 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const workspaces = await prisma.workspace.findMany({
+  const projects = await prisma.project.findMany({
     where: { userId: session.user.id },
-    include: { projects: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "asc" }
   });
 
-  const serializedWorkspaces = workspaces.map(ws => ({
-    ...ws,
-    createdAt: ws.createdAt.toISOString(),
-    updatedAt: ws.updatedAt.toISOString(),
-    projects: ws.projects.map(p => ({
-      ...p,
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString(),
-    }))
+  const serializedProjects = projects.map(p => ({
+    ...p,
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
   }));
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar workspaces={serializedWorkspaces} />
+      <Sidebar projects={serializedProjects} />
       <main className="flex-1 overflow-y-auto bg-white">
         {children}
       </main>

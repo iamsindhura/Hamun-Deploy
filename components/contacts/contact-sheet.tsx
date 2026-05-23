@@ -59,16 +59,23 @@ interface ContactSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contact?: any; // If provided, we are in Edit mode
+  initialTab?: "profile" | "timeline";
 }
 
-export function ContactSheet({ open, onOpenChange, contact }: ContactSheetProps) {
+export function ContactSheet({ open, onOpenChange, contact, initialTab = "profile" }: ContactSheetProps) {
   const isEdit = !!contact;
   const [activities, setActivities] = useState<any[]>([]);
   const [isLogging, setIsLogging] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [activityType, setActivityType] = useState<ActivityType>(ActivityType.NOTE);
-  const [activeTab, setActiveTab] = useState<"profile" | "timeline">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "timeline">(initialTab);
   const [tagInput, setTagInput] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab(initialTab);
+    }
+  }, [open, initialTab]);
 
   const fetchActivities = useCallback(async () => {
     if (contact?.id) {

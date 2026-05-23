@@ -2,16 +2,16 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Task, TaskPriority } from "@prisma/client";
-import { updateTask, deleteTask } from "@/app/actions/tasks";
+import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask } from "@/app/actions/tasks";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Flag, Trash2 } from "lucide-react";
+import { Flag, Trash2, CheckCircle2, Circle, Plus } from "lucide-react";
 
 interface TaskDetailSheetProps {
-  task: Task | null;
+  task: any | null; // Using any to accept included subtasks
   onClose: () => void;
-  onUpdate: (updatedTask: Task) => void;
+  onUpdate: (updatedTask: any) => void;
   onDelete: (taskId: string) => void;
   projectId: string;
 }
@@ -20,6 +20,8 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("NONE");
+  const [subtasks, setSubtasks] = useState<any[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
@@ -27,6 +29,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       setTitle(task.title);
       setDescription(task.description || "");
       setPriority(task.priority);
+      setSubtasks(task.subtasks || []);
     }
   }, [task]);
 
@@ -61,26 +64,59 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
     onClose();
   };
 
+  const handleAddSubtask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubtaskTitle.trim()) return;
+    const tempId = `temp-sub-${Date.now()}`;
+    const newSubtask = { id: tempId, title: newSubtaskTitle.trim(), isCompleted: false, taskId: task.id, position: subtasks.length };
+    setSubtasks([...subtasks, newSubtask]);
+    setNewSubtaskTitle("");
+
+    const res = await createSubtask({ title: newSubtask.title, taskId: task.id, projectId, position: newSubtask.position });
+    if (res.success && res.data) {
+      setSubtasks(prev => prev.map(s => s.id === tempId ? res.data : s));
+      onUpdate({ ...task, subtasks: [...subtasks.filter(s => s.id !== tempId), res.data] });
+    }
+  };
+
+  const toggleSubtask = async (subtaskId: string, isCompleted: boolean) => {
+    const updatedSubtasks = subtasks.map(s => s.id === subtaskId ? { ...s, isCompleted: !isCompleted } : s);
+    setSubtasks(updatedSubtasks);
+    onUpdate({ ...task, subtasks: updatedSubtasks });
+    await updateSubtask(subtaskId, projectId, { isCompleted: !isCompleted });
+  };
+
+  const handleDeleteSubtask = async (subtaskId: string) => {
+    const updatedSubtasks = subtasks.filter(s => s.id !== subtaskId);
+    setSubtasks(updatedSubtasks);
+    onUpdate({ ...task, subtasks: updatedSubtasks });
+    await deleteSubtask(subtaskId, projectId);
+  };
+
   return (
     <Sheet open={!!task} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="sm:max-w-md flex flex-col h-full z-[100]">
-        <SheetHeader>
-          <SheetTitle>Task Details</SheetTitle>
-          <SheetDescription className="sr-only">Edit your task details</SheetDescription>
-        </SheetHeader>
+      <SheetContent className="sm:max-w-xl flex flex-col h-full z-[100] p-0 overflow-hidden bg-slate-50/50">
+        <div className="px-6 py-4 border-b bg-white">
+          <SheetHeader>
+            <SheetTitle className="text-xl">Task Details</SheetTitle>
+            <SheetDescription className="sr-only">Edit your task details</SheetDescription>
+          </SheetHeader>
+        </div>
         
-        <div className="flex-1 overflow-y-auto py-4 space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Title</label>
+            <label className="text-sm font-semibold text-slate-700">Task Title</label>
             <Input 
+              className="text-base font-medium h-12 bg-white"
               value={title} 
               onChange={(e) => setTitle(e.target.value)} 
               onBlur={() => handleSave({ title })}
+              placeholder="Task title..."
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Description</label>
+            <label className="text-sm font-semibold text-slate-700">Description</label>
             <textarea 
               className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Add details..."
@@ -91,11 +127,11 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Priority</label>
+            <label className="text-sm font-semibold text-slate-700">Priority</label>
             <div className="flex flex-wrap gap-2">
               <Button 
                 variant={priority === "HIGH" ? "default" : "outline"}
-                className={priority === "HIGH" ? "bg-red-500 hover:bg-red-600 text-white" : ""}
+                className={priority === "HIGH" ? "bg-red-500 hover:bg-red-600 text-white" : "bg-white"}
                 onClick={() => handlePriorityChange("HIGH")}
                 size="sm"
               >
@@ -103,7 +139,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               </Button>
               <Button 
                 variant={priority === "MEDIUM" ? "default" : "outline"}
-                className={priority === "MEDIUM" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : ""}
+                className={priority === "MEDIUM" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "bg-white"}
                 onClick={() => handlePriorityChange("MEDIUM")}
                 size="sm"
               >
@@ -111,7 +147,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               </Button>
               <Button 
                 variant={priority === "LOW" ? "default" : "outline"}
-                className={priority === "LOW" ? "bg-blue-500 hover:bg-blue-600 text-white" : ""}
+                className={priority === "LOW" ? "bg-blue-500 hover:bg-blue-600 text-white" : "bg-white"}
                 onClick={() => handlePriorityChange("LOW")}
                 size="sm"
               >
@@ -128,9 +164,39 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               )}
             </div>
           </div>
+
+          <div className="space-y-3">
+            <label className="text-sm font-semibold text-slate-700">Subtasks</label>
+            <div className="space-y-2">
+              {subtasks.map((st: any) => (
+                <div key={st.id} className="flex items-center gap-2 group bg-white border p-2 rounded-lg shadow-sm">
+                  <button onClick={() => toggleSubtask(st.id, st.isCompleted)} className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0">
+                    {st.isCompleted ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <Circle className="h-5 w-5" />}
+                  </button>
+                  <span className={`flex-1 text-sm ${st.isCompleted ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                    {st.title}
+                  </span>
+                  <button onClick={() => handleDeleteSubtask(st.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={handleAddSubtask} className="flex items-center gap-2 mt-2">
+              <Input
+                placeholder="Add a new subtask..."
+                value={newSubtaskTitle}
+                onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                className="bg-white"
+              />
+              <Button type="submit" size="icon" disabled={!newSubtaskTitle.trim()}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
         </div>
 
-        <div className="border-t pt-4 flex justify-between">
+        <div className="p-4 border-t bg-white flex items-center justify-between mt-auto">
           <Button variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" /> Delete Task
           </Button>

@@ -4,13 +4,13 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-export async function getProjects(workspaceId: string) {
+export async function getProjects() {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
     const projects = await prisma.project.findMany({
-      where: { workspaceId, userId: session.user.id },
+      where: { userId: session.user.id },
       orderBy: { createdAt: "asc" }
     });
     return { success: true, data: projects };
@@ -19,7 +19,7 @@ export async function getProjects(workspaceId: string) {
   }
 }
 
-export async function createProject(data: { name: string; color?: string; workspaceId: string }) {
+export async function createProject(data: { name: string; color?: string }) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -28,7 +28,6 @@ export async function createProject(data: { name: string; color?: string; worksp
       data: {
         name: data.name,
         color: data.color,
-        workspaceId: data.workspaceId,
         userId: session.user.id
       }
     });

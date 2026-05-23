@@ -28,7 +28,6 @@ model User {
   image     String?
   contacts  Contact[]
   pushSubs  PushSubscription[]
-  workspaces Workspace[]
   projects   Project[]
   tasks      Task[]
   // Auth.js v5 required fields
@@ -141,24 +140,12 @@ enum TaskPriority {
   HIGH
 }
 
-model Workspace {
-  id        String    @id @default(cuid())
-  name      String
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projects  Project[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
 
-  @@index([userId])
-}
 
 model Project {
   id          String      @id @default(cuid())
   name        String
   color       String?     
-  workspaceId String
-  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   columns     TaskColumn[]
@@ -166,7 +153,6 @@ model Project {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  @@index([workspaceId])
   @@index([userId])
 }
 

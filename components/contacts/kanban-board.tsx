@@ -31,6 +31,7 @@ import { MoreHorizontal, MessageSquare, Phone } from "lucide-react";
 import { changeStage, logContact } from "@/app/actions/contacts";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ContactSheet } from "./contact-sheet";
 
 interface KanbanContact {
   id: string;
@@ -50,6 +51,13 @@ const STAGES: Stage[] = ["LEAD", "POTENTIAL", "CUSTOMER", "REJECTED"];
 export function KanbanBoard({ initialData }: KanbanBoardProps) {
   const [contacts, setContacts] = useState(initialData);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedContact, setSelectedContact] = useState<KanbanContact | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  const handleCardClick = (contact: KanbanContact) => {
+    setSelectedContact(contact);
+    setIsSheetOpen(true);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -113,6 +121,7 @@ export function KanbanBoard({ initialData }: KanbanBoardProps) {
 
   return (
     <DndContext
+      id="contacts-dnd-context"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
@@ -125,6 +134,7 @@ export function KanbanBoard({ initialData }: KanbanBoardProps) {
             id={stage}
             title={stage}
             contacts={contacts.filter((c) => c.stage === stage)}
+            onCardClick={handleCardClick}
           />
         ))}
       </div>
@@ -136,23 +146,39 @@ export function KanbanBoard({ initialData }: KanbanBoardProps) {
           />
         ) : null}
       </DragOverlay>
+
+      <ContactSheet 
+        open={isSheetOpen} 
+        onOpenChange={setIsSheetOpen} 
+        contact={selectedContact}
+        initialTab="timeline"
+      />
     </DndContext>
   );
 }
 
-function KanbanColumn({ id, title, contacts }: { id: string, title: string, contacts: KanbanContact[] }) {
+const STAGE_COLORS: Record<string, { bg: string, border: string, text: string }> = {
+  LEAD: { bg: "bg-blue-50/80", border: "border-t-blue-500", text: "text-blue-700" },
+  POTENTIAL: { bg: "bg-amber-50/80", border: "border-t-amber-500", text: "text-amber-800" },
+  CUSTOMER: { bg: "bg-emerald-50/80", border: "border-t-emerald-500", text: "text-emerald-700" },
+  REJECTED: { bg: "bg-rose-50/80", border: "border-t-rose-500", text: "text-rose-700" },
+};
+
+function KanbanColumn({ id, title, contacts, onCardClick }: { id: string, title: string, contacts: KanbanContact[], onCardClick: (c: KanbanContact) => void }) {
+  const colors = STAGE_COLORS[id] || { bg: "bg-slate-50", border: "border-t-slate-500", text: "text-slate-700" };
+
   return (
-    <div className="flex w-80 shrink-0 flex-col gap-4 rounded-lg bg-slate-50 p-4">
+    <div className={cn("flex w-80 shrink-0 flex-col gap-4 rounded-xl border-t-[4px] p-4 shadow-sm", colors.bg, colors.border)}>
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-slate-700">{title}</h3>
-        <Badge variant="outline" className="bg-white">
+        <h3 className={cn("font-bold tracking-wide", colors.text)}>{title}</h3>
+        <Badge variant="outline" className={cn("bg-white shadow-sm font-semibold", colors.text)}>
           {contacts.length}
         </Badge>
       </div>
       <SortableContext items={contacts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
         <div className="flex flex-1 flex-col gap-3">
           {contacts.map((contact) => (
-            <KanbanCard key={contact.id} contact={contact} />
+            <KanbanCard key={contact.id} contact={contact} onClick={() => onCardClick(contact)} />
           ))}
           {contacts.length === 0 && (
             <div className="flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-sm text-slate-400">
@@ -165,7 +191,7 @@ function KanbanColumn({ id, title, contacts }: { id: string, title: string, cont
   );
 }
 
-function KanbanCard({ contact, isOverlay }: { contact: KanbanContact; isOverlay?: boolean }) {
+function KanbanCard({ contact, isOverlay, onClick }: { contact: KanbanContact; isOverlay?: boolean, onClick?: () => void }) {
   const {
     attributes,
     listeners,
@@ -196,10 +222,11 @@ function KanbanCard({ contact, isOverlay }: { contact: KanbanContact; isOverlay?
       ref={setNodeRef}
       style={style}
       className={cn(
-        "cursor-grab active:cursor-grabbing",
+        "cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow",
         isDragging && "opacity-30",
         isOverlay && "rotate-3 scale-105 shadow-xl"
       )}
+      onClick={onClick}
       {...attributes}
       {...listeners}
     >
