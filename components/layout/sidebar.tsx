@@ -80,10 +80,8 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
     <div className="flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       <div className="p-6 pb-4">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shadow-sm">
-            <span className="text-xl font-bold text-primary-foreground">N</span>
-          </div>
-          <span className="text-xl font-bold tracking-tight">NanoCRM</span>
+          <img src="/logo-icon.png" alt="Hamun Logo" className="h-20 w-20 object-contain rounded-xl shadow-sm" />
+          <span className="text-xl font-bold tracking-tight">Hamun</span>
         </Link>
       </div>
 

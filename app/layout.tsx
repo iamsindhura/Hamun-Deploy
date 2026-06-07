@@ -7,8 +7,8 @@ import { PushProvider } from "@/components/providers/push-provider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "NanoCRM",
-  description: "Personal CRM for modern professionals",
+  title: "Hamun",
+  description: "Hamun - CRM, Todo, Habits & Journal",
   manifest: "/manifest.json",
 };
 

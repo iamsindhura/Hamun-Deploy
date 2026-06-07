@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const privateVapidKey = process.env.VAPID_PRIVATE_KEY!;
 
   webpush.setVapidDetails(
-    "mailto:admin@nanocrm.app",
+    "mailto:admin@hamun.app",
     publicVapidKey,
     privateVapidKey
   );

@@ -3,16 +3,12 @@ import { signIn } from "@/auth";
 export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900">
-      <div className="w-full max-w-md mx-4 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+      <div className="w-full max-w-md mx-4 bg-white rounded-2xl p-8 shadow-2xl border border-slate-100">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-purple-600 mb-4">
-            <svg className="w-8 h-8 text-white" style={{ width: '32px', height: '32px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white">NanoCRM</h1>
-          <p className="text-slate-400 mt-1 text-sm">Your personal relationship manager</p>
+          <img src="/logo-icon.png" alt="Hamun Logo" className="mx-auto h-32 w-32 object-contain mb-4" />
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Hamun</h1>
+          <p className="text-slate-600 mt-1 text-sm">CRM, Todo, Habits & Journal</p>
         </div>
 
         {/* Sign In Form */}
@@ -24,7 +20,7 @@ export default function LoginPage() {
         >
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-3 bg-white text-slate-800 font-semibold py-3 px-4 rounded-xl hover:bg-slate-100 transition-colors duration-200 shadow-md"
+            className="w-full flex items-center justify-center gap-3 bg-white text-slate-800 font-semibold py-3 px-4 rounded-xl hover:bg-slate-100 transition-colors duration-200 border border-slate-200 shadow-sm"
           >
             {/* Google Icon */}
             <svg className="w-5 h-5" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24">

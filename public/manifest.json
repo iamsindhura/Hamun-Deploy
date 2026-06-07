@@ -1,7 +1,7 @@
 {
-  "name": "NanoCRM",
-  "short_name": "NanoCRM",
-  "description": "Your personal relationship manager",
+  "name": "Hamun",
+  "short_name": "Hamun",
+  "description": "Hamun - CRM, Todo, Habits & Journal",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
