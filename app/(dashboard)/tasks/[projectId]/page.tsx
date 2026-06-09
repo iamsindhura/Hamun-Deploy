@@ -2,7 +2,6 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
-import { TopNav } from "@/components/layout/top-nav"; // Assuming there is a TopNav or similar, if not I'll create a simple header
 
 export default async function ProjectTasksPage({
   params,
