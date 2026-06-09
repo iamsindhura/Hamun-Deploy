@@ -5,7 +5,7 @@ import { Task, TaskColumn, TaskPriority } from "@prisma/client";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
-import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2 } from "lucide-react";
+import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -106,7 +106,37 @@ function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => 
   );
 }
 
+function CompletedTaskCard({ task, onClick, onToggle }: { task: Task, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
+  return (
+    <div 
+      className="group relative flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50/40 p-3 shadow-none transition-all hover:bg-slate-100/40 cursor-pointer opacity-70"
+      onClick={onClick}
+    >
+      <div className="flex items-start gap-2">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }} 
+          className="mt-0.5 text-emerald-500 hover:text-emerald-600 transition-colors shrink-0"
+        >
+          <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-50 bg-white rounded-full" />
+        </button>
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+          <span className="font-semibold text-[14px] leading-snug text-slate-400 line-through truncate">
+            {task.title}
+          </span>
+          {task.dueDate && (
+            <span className="text-[11px] text-slate-400 font-medium">
+              {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskClick, onRename, onDelete }: any) {
+  const [isCompletedExpanded, setIsCompletedExpanded] = useState(false);
+
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: column.id,
     data: { type: "Column", column },
@@ -117,7 +147,9 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
     transform: CSS.Transform.toString(transform),
   };
 
-  const taskIds = useMemo(() => tasks.map((t: Task) => t.id), [tasks]);
+  const activeTasks = useMemo(() => tasks.filter((t: Task) => !t.isCompleted), [tasks]);
+  const completedTasks = useMemo(() => tasks.filter((t: Task) => t.isCompleted), [tasks]);
+  const activeTaskIds = useMemo(() => activeTasks.map((t: Task) => t.id), [activeTasks]);
 
   const colors = COLUMN_COLORS[index % COLUMN_COLORS.length];
 
@@ -134,7 +166,7 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
         </div>
         <div className="flex items-center gap-1">
           <Badge variant="outline" className={cn("bg-white shadow-sm font-semibold mr-1", colors.text)}>
-            {tasks.length}
+            {activeTasks.length}
           </Badge>
           <DropdownMenu>
             <DropdownMenuTrigger className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -153,8 +185,8 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
       </div>
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto no-scrollbar pb-2">
-        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          {tasks.map((task: Task) => (
+        <SortableContext items={activeTaskIds} strategy={verticalListSortingStrategy}>
+          {activeTasks.map((task: Task) => (
             <SortableTask 
               key={task.id} 
               task={task} 
@@ -163,6 +195,38 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
             />
           ))}
         </SortableContext>
+
+        {completedTasks.length > 0 && (
+          <div className="mt-4 border-t border-slate-200/60 pt-3">
+            <button
+              onClick={() => setIsCompletedExpanded(!isCompletedExpanded)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors w-full text-left select-none"
+            >
+              {isCompletedExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+              )}
+              <span className="font-semibold text-slate-600">Completed</span>
+              <span className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-500 font-medium">
+                {completedTasks.length}
+              </span>
+            </button>
+            
+            {isCompletedExpanded && (
+              <div className="mt-2.5 flex flex-col gap-2 max-h-60 overflow-y-auto no-scrollbar pt-1">
+                {completedTasks.map((task: Task) => (
+                  <CompletedTaskCard
+                    key={task.id}
+                    task={task}
+                    onClick={() => onTaskClick(task)}
+                    onToggle={onToggleTask}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-2">
