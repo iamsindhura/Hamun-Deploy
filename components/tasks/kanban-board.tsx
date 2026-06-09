@@ -268,12 +268,12 @@ interface KanbanBoardProps {
   projectId: string;
   projectName: string;
   initialColumns: TaskColumn[];
-  initialTasks: Task[];
+  initialTasks: any[];
 }
 
 export function KanbanBoard({ projectId, projectName, initialColumns, initialTasks }: KanbanBoardProps) {
   const [columns, setColumns] = useState<TaskColumn[]>(initialColumns);
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<any[]>(initialTasks);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
