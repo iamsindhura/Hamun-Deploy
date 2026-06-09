@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Task, TaskColumn, TaskPriority } from "@prisma/client";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
-import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -44,6 +44,18 @@ const COLUMN_COLORS = [
   { bg: "bg-cyan-50/80", border: "border-t-cyan-500", text: "text-cyan-800" },
 ];
 
+const formatDueDate = (dateInput: Date | string) => {
+  const date = new Date(dateInput);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
+};
+
+const formatCompletedDueDate = (dateInput: Date | string) => {
+  const date = new Date(dateInput);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+};
+
 function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -78,7 +90,7 @@ function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => 
         >
           {task.isCompleted ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <Circle className="h-5 w-5" />}
         </button>
-        <span className={cn("flex-1 font-semibold text-[15px] leading-snug text-slate-800", task.isCompleted && "text-slate-400 line-through")}>
+        <span className={cn("flex-1 font-semibold text-[15px] leading-snug text-slate-800 break-all", task.isCompleted && "text-slate-400 line-through")}>
           {task.title}
         </span>
       </div>
@@ -88,7 +100,7 @@ function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => 
           {task.dueDate && (
             <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-medium text-slate-500">
               <Calendar className="h-3 w-3" />
-              {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              {formatDueDate(task.dueDate)}
             </div>
           )}
           {task.priority !== "NONE" && (
@@ -125,7 +137,7 @@ function CompletedTaskCard({ task, onClick, onToggle }: { task: Task, onClick: (
           </span>
           {task.dueDate && (
             <span className="text-[11px] text-slate-400 font-medium">
-              {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+              {formatCompletedDueDate(task.dueDate)}
             </span>
           )}
         </div>
@@ -184,7 +196,7 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto no-scrollbar pb-2">
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden no-scrollbar pb-2">
         <SortableContext items={activeTaskIds} strategy={verticalListSortingStrategy}>
           {activeTasks.map((task: Task) => (
             <SortableTask 
@@ -238,11 +250,12 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
 
 interface KanbanBoardProps {
   projectId: string;
+  projectName: string;
   initialColumns: TaskColumn[];
   initialTasks: Task[];
 }
 
-export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanBoardProps) {
+export function KanbanBoard({ projectId, projectName, initialColumns, initialTasks }: KanbanBoardProps) {
   const [columns, setColumns] = useState<TaskColumn[]>(initialColumns);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
@@ -251,6 +264,26 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
 
   const [activeColumn, setActiveColumn] = useState<TaskColumn | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [focusColumnIndex, setFocusColumnIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isFocusMode) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        setFocusColumnIndex(prev => Math.max(0, prev - 1));
+      } else if (e.key === "ArrowRight") {
+        setFocusColumnIndex(prev => Math.min(columns.length - 1, prev + 1));
+      } else if (e.key === "Escape") {
+        setIsFocusMode(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFocusMode, columns.length]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
@@ -411,87 +444,232 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
   const columnIds = useMemo(() => columns.map(c => c.id), [columns]);
 
   return (
-    <DndContext
-      id="tasks-dnd-context"
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-    >
-      <div className="flex h-full gap-4 overflow-x-auto p-4 pb-8 items-start">
-        <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
-          {columns.map((column, index) => (
-            <SortableColumn 
-              key={column.id} 
-              column={column} 
-              index={index}
-              tasks={tasks.filter(t => t.columnId === column.id)} 
-              onAddTask={handleAddTask}
-              onToggleTask={toggleTaskCompletion}
-              onTaskClick={setSelectedTask}
-              onRename={handleRenameColumn}
-              onDelete={handleDeleteColumn}
-            />
-          ))}
-        </SortableContext>
-
-        <div className="w-80 flex-shrink-0">
-          {!isAddingColumn ? (
+    <div className="flex h-full flex-col bg-white">
+      {/* Header with Project Name and Focus Mode button */}
+      <div className="flex h-16 items-center justify-between border-b px-8 bg-slate-50/50 shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+            {projectName}
+          </h1>
+          {columns.length > 0 && (
             <Button
               variant="outline"
-              className="w-full justify-start border-dashed bg-transparent"
-              onClick={() => setIsAddingColumn(true)}
+              size="sm"
+              onClick={() => {
+                setFocusColumnIndex(0);
+                setIsFocusMode(true);
+              }}
+              className="flex items-center gap-1.5 rounded-full px-4 border-primary/20 hover:border-primary/50 text-slate-700 font-semibold shadow-sm"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Section
+              <Maximize2 className="h-4 w-4" /> Focus Mode
             </Button>
-          ) : (
-            <form onSubmit={handleAddColumn} className="rounded-xl border bg-muted/40 p-3">
-              <Input
-                autoFocus
-                placeholder="Section name"
-                value={newColumnName}
-                onChange={(e) => setNewColumnName(e.target.value)}
-                className="mb-2 h-9"
-              />
-              <div className="flex items-center gap-2">
-                <Button type="submit" size="sm" className="h-8">Add Section</Button>
-                <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setIsAddingColumn(false)}>Cancel</Button>
-              </div>
-            </form>
           )}
         </div>
       </div>
 
-      <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: "0.4" } } }) }}>
-        {activeColumn && (
-          <SortableColumn 
-            column={activeColumn} 
-            tasks={tasks.filter(t => t.columnId === activeColumn.id)} 
-            onAddTask={() => {}}
-            onToggleTask={() => {}}
-            onTaskClick={() => {}}
-            onRename={() => {}}
-            onDelete={() => {}}
-          />
-        )}
-        {activeTask && (
-          <SortableTask 
-            task={activeTask} 
-            onClick={() => {}}
-            onToggle={() => {}}
-          />
-        )}
-      </DragOverlay>
+      <div className="flex-1 overflow-hidden relative">
+        <DndContext
+          id="tasks-dnd-context"
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+        >
+          <div className="flex h-full gap-4 overflow-x-auto p-4 pb-8 items-start">
+            <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
+              {columns.map((column, index) => (
+                <SortableColumn 
+                  key={column.id} 
+                  column={column} 
+                  index={index}
+                  tasks={tasks.filter(t => t.columnId === column.id)} 
+                  onAddTask={handleAddTask}
+                  onToggleTask={toggleTaskCompletion}
+                  onTaskClick={setSelectedTask}
+                  onRename={handleRenameColumn}
+                  onDelete={handleDeleteColumn}
+                />
+              ))}
+            </SortableContext>
 
-      <TaskDetailSheet
-        task={selectedTask}
-        projectId={projectId}
-        onClose={() => setSelectedTask(null)}
-        onUpdate={(updatedTask) => setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t))}
-        onDelete={(taskId) => setTasks(prev => prev.filter(t => t.id !== taskId))}
-      />
-    </DndContext>
+            <div className="w-80 flex-shrink-0">
+              {!isAddingColumn ? (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start border-dashed bg-transparent"
+                  onClick={() => setIsAddingColumn(true)}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Section
+                </Button>
+              ) : (
+                <form onSubmit={handleAddColumn} className="rounded-xl border bg-muted/40 p-3">
+                  <Input
+                    autoFocus
+                    placeholder="Section name"
+                    value={newColumnName}
+                    onChange={(e) => setNewColumnName(e.target.value)}
+                    className="mb-2 h-9"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button type="submit" size="sm" className="h-8">Add Section</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setIsAddingColumn(false)}>Cancel</Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+
+          <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: "0.4" } } }) }}>
+            {activeColumn && (
+              <SortableColumn 
+                column={activeColumn} 
+                tasks={tasks.filter(t => t.columnId === activeColumn.id)} 
+                onAddTask={() => {}}
+                onToggleTask={() => {}}
+                onTaskClick={() => {}}
+                onRename={() => {}}
+                onDelete={() => {}}
+              />
+            )}
+            {activeTask && (
+              <SortableTask 
+                task={activeTask} 
+                onClick={() => {}}
+                onToggle={() => {}}
+              />
+            )}
+          </DragOverlay>
+
+          <TaskDetailSheet
+            task={selectedTask}
+            projectId={projectId}
+            onClose={() => setSelectedTask(null)}
+            onUpdate={(updatedTask) => setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t))}
+            onDelete={(taskId) => setTasks(prev => prev.filter(t => t.id !== taskId))}
+          />
+        </DndContext>
+      </div>
+
+      {/* Focus Mode Overlay */}
+      {isFocusMode && columns.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/95" onClick={() => setIsFocusMode(false)} />
+          
+          <div className="relative z-10 flex items-center gap-6 max-w-4xl w-full">
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={focusColumnIndex === 0}
+              onClick={() => setFocusColumnIndex(prev => Math.max(0, prev - 1))}
+              className="h-12 w-12 rounded-full shadow-lg border-slate-200/80 bg-white hover:bg-slate-50 shrink-0 disabled:opacity-40"
+            >
+              <ChevronLeft className="h-6 w-6 text-slate-700" />
+            </Button>
+
+            <div className="flex-1 bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col h-[75vh] max-w-md mx-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b px-6 py-4 bg-slate-50/50">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-lg text-slate-800">
+                    {columns[focusColumnIndex].name}
+                  </span>
+                  <Badge className="bg-primary/10 text-primary hover:bg-primary/15 border-none font-semibold">
+                    {tasks.filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted).length}
+                  </Badge>
+                </div>
+                <button
+                  onClick={() => setIsFocusMode(false)}
+                  className="rounded-lg p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3 no-scrollbar">
+                {tasks.filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <CheckCircle2 className="h-12 w-12 text-emerald-400 opacity-60 mb-3" />
+                    <p className="text-sm font-semibold text-slate-500">All tasks completed!</p>
+                    <p className="text-xs text-slate-400 mt-1">Enjoy the focus space.</p>
+                  </div>
+                ) : (
+                  tasks
+                    .filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted)
+                    .map((task) => (
+                      <div 
+                        key={task.id}
+                        onClick={() => setSelectedTask(task)}
+                        className="group flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm hover:border-slate-200 transition-all cursor-pointer"
+                      >
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            toggleTaskCompletion(task.id, task.isCompleted); 
+                          }} 
+                          className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
+                        >
+                          <Circle className="h-5 w-5" />
+                        </button>
+                        <span className="font-semibold text-slate-800 text-[15px] leading-snug break-all">
+                          {task.title}
+                        </span>
+                      </div>
+                    ))
+                )}
+
+                {tasks.filter(t => t.columnId === columns[focusColumnIndex].id && t.isCompleted).length > 0 && (
+                  <div className="mt-6 border-t border-slate-100 pt-4">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Completed</h3>
+                    <div className="flex flex-col gap-2">
+                      {tasks
+                        .filter(t => t.columnId === columns[focusColumnIndex].id && t.isCompleted)
+                        .map((task) => (
+                          <div 
+                            key={task.id}
+                            onClick={() => setSelectedTask(task)}
+                            className="group flex items-start gap-3 rounded-xl border border-slate-100/50 bg-slate-50/30 p-3 shadow-none opacity-60 hover:opacity-80 transition-all cursor-pointer"
+                          >
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                toggleTaskCompletion(task.id, task.isCompleted); 
+                              }} 
+                              className="mt-0.5 text-emerald-500 transition-colors shrink-0"
+                            >
+                              <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-50 bg-white rounded-full" />
+                            </button>
+                            <span className="font-medium text-slate-400 line-through text-[14px] leading-snug truncate">
+                              {task.title}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 bg-slate-50/50 border-t border-slate-100">
+                <QuickAddTask 
+                  columnId={columns[focusColumnIndex].id} 
+                  projectId={projectId} 
+                  onAdd={(title) => handleAddTask(title, columns[focusColumnIndex].id)} 
+                />
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={focusColumnIndex === columns.length - 1}
+              onClick={() => setFocusColumnIndex(prev => Math.min(columns.length - 1, prev + 1))}
+              className="h-12 w-12 rounded-full shadow-lg border-slate-200/80 bg-white hover:bg-slate-50 shrink-0 disabled:opacity-40"
+            >
+              <ChevronRight className="h-6 w-6 text-slate-700" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

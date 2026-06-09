@@ -95,10 +95,14 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
 
   return (
     <Sheet open={!!task} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="sm:max-w-xl flex flex-col h-full z-[100] p-0 overflow-hidden bg-slate-50/50">
-        <div className="px-6 py-4 border-b bg-white">
-          <SheetHeader>
-            <SheetTitle className="text-xl">Task Details</SheetTitle>
+      <SheetContent 
+        overlayClassName="bg-black/95" 
+        darkHeader={true}
+        className="data-[side=right]:sm:max-w-3xl flex flex-col h-full z-[100] p-0 overflow-hidden bg-white"
+      >
+        <div className="px-6 py-2 bg-gradient-to-r from-primary to-blue-800 border-none shrink-0 shadow-sm">
+          <SheetHeader className="p-0">
+            <SheetTitle className="text-lg font-black tracking-tight text-white">Task Details</SheetTitle>
             <SheetDescription className="sr-only">Edit your task details</SheetDescription>
           </SheetHeader>
         </div>
