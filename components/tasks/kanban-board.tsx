@@ -5,7 +5,7 @@ import { Task, TaskColumn, TaskPriority } from "@prisma/client";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
-import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X } from "lucide-react";
+import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -56,7 +56,7 @@ const formatCompletedDueDate = (dateInput: Date | string) => {
   return `${months[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
 };
 
-function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
+function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: "Task", task },
@@ -95,7 +95,7 @@ function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => 
         </span>
       </div>
       
-      {(task.dueDate || task.priority !== "NONE") && (
+      {(task.dueDate || task.priority !== "NONE" || (task.subtasks && task.subtasks.length > 0)) && (
         <div className="mt-2 flex items-center gap-2 pl-8 flex-wrap">
           {task.dueDate && (
             <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-medium text-slate-500">
@@ -112,13 +112,21 @@ function SortableTask({ task, onClick, onToggle }: { task: Task, onClick: () => 
               <Flag className="h-3 w-3" /> {task.priority}
             </div>
           )}
+          {task.subtasks && task.subtasks.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-semibold text-slate-500">
+              <ListTodo className="h-3 w-3 text-slate-400" />
+              <span>
+                {task.subtasks.filter((s: any) => s.isCompleted).length}/{task.subtasks.length}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function CompletedTaskCard({ task, onClick, onToggle }: { task: Task, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
+function CompletedTaskCard({ task, onClick, onToggle }: { task: any, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
   return (
     <div 
       className="group relative flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50/40 p-3 shadow-none transition-all hover:bg-slate-100/40 cursor-pointer opacity-70"
@@ -135,11 +143,19 @@ function CompletedTaskCard({ task, onClick, onToggle }: { task: Task, onClick: (
           <span className="font-semibold text-[14px] leading-snug text-slate-400 line-through truncate">
             {task.title}
           </span>
-          {task.dueDate && (
-            <span className="text-[11px] text-slate-400 font-medium">
-              {formatCompletedDueDate(task.dueDate)}
-            </span>
-          )}
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            {task.dueDate && (
+              <span className="text-[11px] text-slate-400 font-medium">
+                {formatCompletedDueDate(task.dueDate)}
+              </span>
+            )}
+            {task.subtasks && task.subtasks.length > 0 && (
+              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                <ListTodo className="h-3 w-3 text-slate-400" />
+                {task.subtasks.filter((s: any) => s.isCompleted).length}/{task.subtasks.length}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -600,20 +616,49 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                       <div 
                         key={task.id}
                         onClick={() => setSelectedTask(task)}
-                        className="group flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm hover:border-slate-200 transition-all cursor-pointer"
+                        className="group flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-4 shadow-sm hover:border-slate-200 transition-all cursor-pointer"
                       >
-                        <button 
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            toggleTaskCompletion(task.id, task.isCompleted); 
-                          }} 
-                          className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
-                        >
-                          <Circle className="h-5 w-5" />
-                        </button>
-                        <span className="font-semibold text-slate-800 text-[15px] leading-snug break-all">
-                          {task.title}
-                        </span>
+                        <div className="flex items-start gap-3">
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              toggleTaskCompletion(task.id, task.isCompleted); 
+                            }} 
+                            className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
+                          >
+                            <Circle className="h-5 w-5" />
+                          </button>
+                          <span className="font-semibold text-slate-800 text-[15px] leading-snug break-all">
+                            {task.title}
+                          </span>
+                        </div>
+                        {(task.dueDate || task.priority !== "NONE" || (task.subtasks && task.subtasks.length > 0)) && (
+                          <div className="flex items-center gap-2 pl-8 flex-wrap">
+                            {task.dueDate && (
+                              <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-medium text-slate-500">
+                                <Calendar className="h-3 w-3" />
+                                {formatDueDate(task.dueDate)}
+                              </div>
+                            )}
+                            {task.priority !== "NONE" && (
+                              <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-bold", 
+                                task.priority === "HIGH" ? "bg-red-50 border-red-100 text-red-600" : 
+                                task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" : 
+                                "bg-blue-50 border-blue-100 text-blue-600"
+                              )}>
+                                <Flag className="h-3 w-3" /> {task.priority}
+                              </div>
+                            )}
+                            {task.subtasks && task.subtasks.length > 0 && (
+                              <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-medium text-slate-500">
+                                <ListTodo className="h-3 w-3 text-slate-400" />
+                                <span>
+                                  {task.subtasks.filter((s: any) => s.isCompleted).length}/{task.subtasks.length}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                 )}

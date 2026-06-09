@@ -31,6 +31,7 @@ export default async function ProjectTasksPage({
 
   const tasks = await prisma.task.findMany({
     where: { projectId },
+    include: { subtasks: true },
     orderBy: { position: "asc" },
   });
 

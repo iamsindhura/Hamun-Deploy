@@ -52,3 +52,19 @@ export async function deleteProject(id: string) {
     return { success: false, error: "Failed to delete project" };
   }
 }
+
+export async function updateProject(id: string, data: { name: string; color?: string }) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const project = await prisma.project.update({
+      where: { id, userId: session.user.id },
+      data
+    });
+    revalidatePath("/");
+    return { success: true, data: project };
+  } catch (error) {
+    return { success: false, error: "Failed to update project" };
+  }
+}

@@ -13,10 +13,12 @@ import {
   Sun,
   ListTodo,
   Plus,
-  FolderOpen
+  FolderOpen,
+  Edit2,
+  Trash2
 } from "lucide-react";
 import { TopTags } from "./top-tags";
-import { createProject } from "@/app/actions/projects";
+import { createProject, updateProject, deleteProject } from "@/app/actions/projects";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
@@ -73,6 +75,19 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
     const name = prompt("Enter Project Name:");
     if (name) {
       await createProject({ name });
+    }
+  };
+
+  const handleRenameProject = async (id: string, currentName: string) => {
+    const newName = prompt("Rename Project:", currentName);
+    if (newName && newName !== currentName) {
+      await updateProject(id, { name: newName });
+    }
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    if (confirm("Are you sure you want to delete this project? All sections and tasks inside will be deleted too.")) {
+      await deleteProject(id);
     }
   };
 
@@ -159,19 +174,45 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
               </div>
               <nav className="space-y-1">
                 {projects.map((project: any) => (
-                  <Link
-                    key={project.id}
-                    href={`/tasks/${project.id}`}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
-                      pathname === `/tasks/${project.id}`
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-white/10"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    )}
+                  <div 
+                    key={project.id} 
+                    className="group relative flex items-center justify-between rounded-lg hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-all"
                   >
-                    <FolderOpen className="h-4 w-4" />
-                    {project.name}
-                  </Link>
+                    <Link
+                      href={`/tasks/${project.id}`}
+                      className={cn(
+                        "flex flex-1 items-center gap-3 px-3 py-2 text-sm font-medium transition-all truncate pr-16",
+                        pathname === `/tasks/${project.id}` && "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-white/10 rounded-lg"
+                      )}
+                    >
+                      <FolderOpen className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{project.name}</span>
+                    </Link>
+
+                    {/* Hover Actions */}
+                    <div className="absolute right-2 top-1.5 hidden group-hover:flex items-center gap-1 z-10 bg-transparent py-0.5">
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRenameProject(project.id, project.name);
+                        }}
+                        className="p-1 rounded hover:bg-sidebar-accent/80 text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteProject(project.id);
+                        }}
+                        className="p-1 rounded hover:bg-red-500/20 text-sidebar-foreground/60 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 ))}
                 {projects.length === 0 && (
                   <div className="px-3 py-2 text-xs text-sidebar-foreground/50 italic">
