@@ -50,7 +50,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
     const finalDesc = updates.description !== undefined ? updates.description : description;
     const finalPriority = updates.priority !== undefined ? updates.priority : priority;
     
-    let finalDueDate: Date | null = undefined;
+    let finalDueDate: Date | null = null;
     if (updates.dueDate !== undefined) {
       finalDueDate = updates.dueDate;
     } else {
