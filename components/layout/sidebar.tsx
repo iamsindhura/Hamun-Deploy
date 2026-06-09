@@ -15,7 +15,8 @@ import {
   Plus,
   FolderOpen,
   Edit2,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import { TopTags } from "./top-tags";
 import { createProject, updateProject, deleteProject } from "@/app/actions/projects";
@@ -58,7 +59,7 @@ const smartLists = [
   },
 ];
 
-export function Sidebar({ projects = [] }: { projects?: any[] }) {
+export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?: any[], isOpen?: boolean, onClose?: () => void }) {
   const pathname = usePathname();
 
   const [activeTab, setActiveTab] = useState<"crm" | "tasks">("crm");
@@ -92,13 +93,34 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
   };
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="p-6 pb-4">
-        <Link href="/" className="flex items-center gap-2">
-          <img src="/logo-icon.png" alt="Hamun Logo" className="h-20 w-20 object-contain rounded-xl shadow-sm" />
-          <span className="text-xl font-bold tracking-tight">Hamun</span>
-        </Link>
-      </div>
+    <>
+      {/* Mobile Backdrop Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-30 bg-black/40 md:hidden animate-in fade-in duration-200" 
+          onClick={onClose}
+        />
+      )}
+
+      <div className={cn(
+        "fixed md:static inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out md:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <div className="p-6 pb-4 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2" onClick={onClose}>
+            <img src="/logo-icon.png" alt="Hamun Logo" className="h-20 w-20 object-contain rounded-xl shadow-sm" />
+            <span className="text-xl font-bold tracking-tight">Hamun</span>
+          </Link>
+          
+          {onClose && (
+            <button 
+              onClick={onClose} 
+              className="md:hidden p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
 
       <div className="px-4 pb-2">
         <div className="flex p-1 bg-sidebar-accent/50 rounded-lg">
@@ -125,6 +147,7 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
                 <Link
                   key={route.href}
                   href={route.href}
+                  onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
                     route.active(pathname)
@@ -151,6 +174,7 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
                   <Link
                     key={list.href}
                     href={list.href}
+                    onClick={onClose}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
                       list.active(pathname)
@@ -180,6 +204,7 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
                   >
                     <Link
                       href={`/tasks/${project.id}`}
+                      onClick={onClose}
                       className={cn(
                         "flex flex-1 items-center gap-3 px-3 py-2 text-sm font-medium transition-all truncate pr-16",
                         pathname === `/tasks/${project.id}` && "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-white/10 rounded-lg"
@@ -236,5 +261,6 @@ export function Sidebar({ projects = [] }: { projects?: any[] }) {
         </Button>
       </div>
     </div>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { ResponsiveLayout } from "@/components/layout/responsive-layout";
 
 import { prisma } from "@/lib/prisma";
 
@@ -27,11 +27,8 @@ export default async function DashboardLayout({
   }));
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar projects={serializedProjects} />
-      <main className="flex-1 overflow-y-auto bg-white">
-        {children}
-      </main>
-    </div>
+    <ResponsiveLayout projects={serializedProjects}>
+      {children}
+    </ResponsiveLayout>
   );
 }

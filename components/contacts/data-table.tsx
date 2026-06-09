@@ -258,15 +258,15 @@ export function DataTable({ data, onEdit }: DataTableProps) {
 
   return (
     <div className="w-full">
-      <div className="flex items-center py-4 gap-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center py-4 gap-4">
         <Input
           placeholder="Filter by name, email or phone..."
           value={globalFilter ?? ""}
           onChange={(event) => setGlobalFilter(event.target.value)}
-          className="max-w-sm"
+          className="w-full sm:max-w-sm"
         />
         <DropdownMenu>
-          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "ml-auto")}>
+          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "sm:ml-auto")}>
             Columns <ChevronDown className="ml-2 h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -288,7 +288,7 @@ export function DataTable({ data, onEdit }: DataTableProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto w-full">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -329,12 +329,12 @@ export function DataTable({ data, onEdit }: DataTableProps) {
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4">
+        <div className="text-sm text-muted-foreground text-center sm:text-left">
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
           {table.getFilteredRowModel().rows.length} row(s) selected.
         </div>
-        <div className="space-x-2">
+        <div className="space-x-2 shrink-0">
           <Button
             variant="outline"
             size="sm"

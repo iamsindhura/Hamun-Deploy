@@ -179,7 +179,7 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
   const completedTasks = useMemo(() => tasks.filter((t: Task) => t.isCompleted), [tasks]);
   const activeTaskIds = useMemo(() => activeTasks.map((t: Task) => t.id), [activeTasks]);
 
-  const colors = COLUMN_COLORS[index % COLUMN_COLORS.length];
+  const colors = COLUMN_COLORS[(index ?? 0) % COLUMN_COLORS.length] || COLUMN_COLORS[0];
 
   if (isDragging) {
     return <div ref={setNodeRef} style={style} className="flex w-80 flex-shrink-0 flex-col rounded-xl border-2 border-primary/50 bg-primary/10 opacity-50 p-3 h-full" />;
@@ -579,18 +579,35 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
               size="icon"
               disabled={focusColumnIndex === 0}
               onClick={() => setFocusColumnIndex(prev => Math.max(0, prev - 1))}
-              className="h-12 w-12 rounded-full shadow-lg border-slate-200/80 bg-white hover:bg-slate-50 shrink-0 disabled:opacity-40"
+              className="hidden md:inline-flex h-12 w-12 rounded-full shadow-lg border-slate-200/80 bg-white hover:bg-slate-50 shrink-0 disabled:opacity-40"
             >
               <ChevronLeft className="h-6 w-6 text-slate-700" />
             </Button>
 
-            <div className="flex-1 bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col h-[75vh] max-w-md mx-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between border-b px-6 py-4 bg-slate-50/50">
+            <div className="flex-1 bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col h-[85vh] md:h-[75vh] w-full max-w-md mx-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b px-4 md:px-6 py-3.5 bg-slate-50/50">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-lg text-slate-800">
+                  <button
+                    disabled={focusColumnIndex === 0}
+                    onClick={() => setFocusColumnIndex(prev => Math.max(0, prev - 1))}
+                    className="md:hidden p-1 rounded-md hover:bg-slate-200/50 text-slate-500 disabled:opacity-30 disabled:hover:bg-transparent transition-colors shrink-0"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+
+                  <span className="font-bold text-base md:text-lg text-slate-800 truncate max-w-[120px] sm:max-w-none">
                     {columns[focusColumnIndex].name}
                   </span>
-                  <Badge className="bg-primary/10 text-primary hover:bg-primary/15 border-none font-semibold">
+
+                  <button
+                    disabled={focusColumnIndex === columns.length - 1}
+                    onClick={() => setFocusColumnIndex(prev => Math.min(columns.length - 1, prev + 1))}
+                    className="md:hidden p-1 rounded-md hover:bg-slate-200/50 text-slate-500 disabled:opacity-30 disabled:hover:bg-transparent transition-colors shrink-0"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+
+                  <Badge className="bg-primary/10 text-primary hover:bg-primary/15 border-none font-semibold ml-1 shrink-0">
                     {tasks.filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted).length}
                   </Badge>
                 </div>
@@ -708,7 +725,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
               size="icon"
               disabled={focusColumnIndex === columns.length - 1}
               onClick={() => setFocusColumnIndex(prev => Math.min(columns.length - 1, prev + 1))}
-              className="h-12 w-12 rounded-full shadow-lg border-slate-200/80 bg-white hover:bg-slate-50 shrink-0 disabled:opacity-40"
+              className="hidden md:inline-flex h-12 w-12 rounded-full shadow-lg border-slate-200/80 bg-white hover:bg-slate-50 shrink-0 disabled:opacity-40"
             >
               <ChevronRight className="h-6 w-6 text-slate-700" />
             </Button>
