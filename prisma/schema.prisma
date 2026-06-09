@@ -150,6 +150,8 @@ model Project {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   columns     TaskColumn[]
   tasks       Task[]
+  position    Float       @default(0)
+  isPinned    Boolean     @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

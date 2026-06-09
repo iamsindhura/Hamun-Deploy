@@ -17,7 +17,11 @@ export default async function DashboardLayout({
 
   const projects = await prisma.project.findMany({
     where: { userId: session.user.id },
-    orderBy: { createdAt: "asc" }
+    orderBy: [
+      { isPinned: "desc" },
+      { position: "asc" },
+      { createdAt: "asc" }
+    ]
   });
 
   const serializedProjects = projects.map(p => ({

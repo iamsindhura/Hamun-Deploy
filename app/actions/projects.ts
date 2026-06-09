@@ -11,7 +11,11 @@ export async function getProjects() {
   try {
     const projects = await prisma.project.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: "asc" }
+      orderBy: [
+        { isPinned: "desc" },
+        { position: "asc" },
+        { createdAt: "asc" }
+      ]
     });
     return { success: true, data: projects };
   } catch (error) {
@@ -24,11 +28,19 @@ export async function createProject(data: { name: string; color?: string }) {
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
+    const maxPositionProject = await prisma.project.findFirst({
+      where: { userId: session.user.id },
+      orderBy: { position: "desc" },
+      select: { position: true }
+    });
+    const position = maxPositionProject ? maxPositionProject.position + 1 : 0;
+
     const project = await prisma.project.create({
       data: {
         name: data.name,
         color: data.color,
-        userId: session.user.id
+        userId: session.user.id,
+        position
       }
     });
     revalidatePath("/");
@@ -53,7 +65,7 @@ export async function deleteProject(id: string) {
   }
 }
 
-export async function updateProject(id: string, data: { name: string; color?: string }) {
+export async function updateProject(id: string, data: { name?: string; color?: string; position?: number; isPinned?: boolean }) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
