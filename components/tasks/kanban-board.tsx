@@ -5,7 +5,7 @@ import { Task, TaskColumn, TaskPriority } from "@prisma/client";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
-import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X, ListTodo } from "lucide-react";
+import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X, ListTodo, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -284,6 +284,17 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [focusColumnIndex, setFocusColumnIndex] = useState(0);
 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredTasks = useMemo(() => {
+    if (!searchQuery.trim()) return tasks;
+    const query = searchQuery.toLowerCase();
+    return tasks.filter(t => 
+      t.title?.toLowerCase().includes(query) || 
+      t.description?.toLowerCase().includes(query)
+    );
+  }, [tasks, searchQuery]);
+
   useEffect(() => {
     if (!isFocusMode) return;
 
@@ -468,17 +479,38 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
             {projectName}
           </h1>
           {columns.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setFocusColumnIndex(0);
-                setIsFocusMode(true);
-              }}
-              className="flex items-center gap-1.5 rounded-full px-4 border-primary/20 hover:border-primary/50 text-slate-700 font-semibold shadow-sm"
-            >
-              <Maximize2 className="h-4 w-4" /> Focus Mode
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="relative w-64 md:w-80">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 w-full pl-9 pr-4 rounded-full border-slate-200 bg-white focus-visible:ring-primary text-slate-800 font-medium"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFocusColumnIndex(0);
+                  setIsFocusMode(true);
+                }}
+                className="flex items-center gap-1.5 rounded-full px-4 border-primary/20 hover:border-primary/50 text-slate-700 font-semibold shadow-sm"
+              >
+                <Maximize2 className="h-4 w-4" /> Focus Mode
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -499,7 +531,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                   key={column.id} 
                   column={column} 
                   index={index}
-                  tasks={tasks.filter(t => t.columnId === column.id)} 
+                  tasks={filteredTasks.filter(t => t.columnId === column.id)} 
                   onAddTask={handleAddTask}
                   onToggleTask={toggleTaskCompletion}
                   onTaskClick={setSelectedTask}
@@ -541,7 +573,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
             {activeColumn && (
               <SortableColumn 
                 column={activeColumn} 
-                tasks={tasks.filter(t => t.columnId === activeColumn.id)} 
+                tasks={filteredTasks.filter(t => t.columnId === activeColumn.id)} 
                 onAddTask={() => {}}
                 onToggleTask={() => {}}
                 onTaskClick={() => {}}
@@ -608,7 +640,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                   </button>
 
                   <Badge className="bg-primary/10 text-primary hover:bg-primary/15 border-none font-semibold ml-1 shrink-0">
-                    {tasks.filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted).length}
+                    {filteredTasks.filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted).length}
                   </Badge>
                 </div>
                 <button
@@ -620,14 +652,14 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3 no-scrollbar">
-                {tasks.filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted).length === 0 ? (
+                {filteredTasks.filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <CheckCircle2 className="h-12 w-12 text-emerald-400 opacity-60 mb-3" />
                     <p className="text-sm font-semibold text-slate-500">All tasks completed!</p>
                     <p className="text-xs text-slate-400 mt-1">Enjoy the focus space.</p>
                   </div>
                 ) : (
-                  tasks
+                  filteredTasks
                     .filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted)
                     .map((task) => (
                       <div 
@@ -680,11 +712,11 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                     ))
                 )}
 
-                {tasks.filter(t => t.columnId === columns[focusColumnIndex].id && t.isCompleted).length > 0 && (
+                {filteredTasks.filter(t => t.columnId === columns[focusColumnIndex].id && t.isCompleted).length > 0 && (
                   <div className="mt-6 border-t border-slate-100 pt-4">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Completed</h3>
                     <div className="flex flex-col gap-2">
-                      {tasks
+                      {filteredTasks
                         .filter(t => t.columnId === columns[focusColumnIndex].id && t.isCompleted)
                         .map((task) => (
                           <div 

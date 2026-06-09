@@ -20,6 +20,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("NONE");
+  const [dueDate, setDueDate] = useState("");
   const [subtasks, setSubtasks] = useState<any[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -30,6 +31,15 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       setDescription(task.description || "");
       setPriority(task.priority);
       setSubtasks(task.subtasks || []);
+      if (task.dueDate) {
+        const d = new Date(task.dueDate);
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        setDueDate(`${year}-${month}-${day}`);
+      } else {
+        setDueDate("");
+      }
     }
   }, [task]);
 
@@ -39,8 +49,15 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
     const finalTitle = updates.title !== undefined ? updates.title : title;
     const finalDesc = updates.description !== undefined ? updates.description : description;
     const finalPriority = updates.priority !== undefined ? updates.priority : priority;
+    
+    let finalDueDate: Date | null = undefined;
+    if (updates.dueDate !== undefined) {
+      finalDueDate = updates.dueDate;
+    } else {
+      finalDueDate = dueDate ? new Date(dueDate) : null;
+    }
 
-    const updated = { ...task, title: finalTitle, description: finalDesc, priority: finalPriority };
+    const updated = { ...task, title: finalTitle, description: finalDesc, priority: finalPriority, dueDate: finalDueDate };
     onUpdate(updated); // optimistic
 
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -48,9 +65,17 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       await updateTask(task.id, projectId, { 
         title: finalTitle, 
         description: finalDesc, 
-        priority: finalPriority 
+        priority: finalPriority,
+        dueDate: finalDueDate
       });
     }, 500);
+  };
+
+  const handleDueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDueDate(val);
+    const parsedDate = val ? new Date(val) : null;
+    handleSave({ dueDate: parsedDate });
   };
 
   const handlePriorityChange = (newPriority: TaskPriority) => {
@@ -131,6 +156,16 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
           </div>
 
           <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Due Date</label>
+            <Input 
+              type="date"
+              className="text-base font-medium h-12 bg-white"
+              value={dueDate}
+              onChange={handleDueDateChange}
+            />
+          </div>
+
+          <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Priority</label>
             <div className="flex flex-wrap gap-2">
               <Button 
@@ -204,7 +239,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
           <Button variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" /> Delete Task
           </Button>
-          <Button onClick={onClose}>Done</Button>
+          <Button onClick={onClose}>Save</Button>
         </div>
       </SheetContent>
     </Sheet>
