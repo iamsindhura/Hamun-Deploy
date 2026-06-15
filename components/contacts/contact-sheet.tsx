@@ -5,6 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { contactSchema, type ContactInput } from "@/lib/validations";
 import { createContact, updateContact } from "@/app/actions/contacts";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { Lightbulb } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -61,15 +63,97 @@ interface ContactSheetProps {
   contact?: any; // If provided, we are in Edit mode
   initialTab?: "profile" | "timeline";
 }
+function calculateRelationshipScore(contact: any) {
+  let score = 50;
 
+  score += Math.min((contact?.followUpCount || 0) * 2, 20);
+
+  if (contact?.lastContactedAt) {
+    const days =
+      Math.floor(
+        (Date.now() -
+          new Date(contact.lastContactedAt).getTime()) /
+        (1000 * 60 * 60 * 24)
+      );
+
+    if (days <= 7) score += 20;
+    else if (days <= 30) score += 10;
+    else score -= 15;
+  }
+
+  if (contact?.linkedin) score += 5;
+
+  if (contact?.company) score += 5;
+
+  return Math.max(0, Math.min(100, score));
+}
+function getRelationshipHealth(score: number) {
+
+  if (score >= 80) {
+    return "🟢 Strong";
+  }
+
+  if (score >= 60) {
+    return "🟡 Good";
+  }
+
+  if (score >= 40) {
+    return "🟠 Weak";
+  }
+
+  return "🔴 Cold";
+}
+function getSuggestedAction(contact: any) {
+
+  if (!contact) {
+    return "No recommendation available";
+  }
+
+  if (!contact.lastContactedAt) {
+    return "Make first contact";
+  }
+
+  const days =
+    Math.floor(
+      (Date.now() -
+        new Date(contact.lastContactedAt).getTime()) /
+      (1000 * 60 * 60 * 24)
+    );
+
+  if (days > 30) {
+    return "Reconnect immediately";
+  }
+
+  if (days > 14) {
+    return "Schedule a follow-up";
+  }
+
+  if (contact.contactType === "MENTOR") {
+    return "Schedule mentor catch-up this week";
+  }
+
+  if (contact.contactType === "INVESTOR") {
+    return "Send an investor progress update";
+  }
+
+  if (contact.contactType === "CLIENT") {
+    return "Check project progress  and next steps";
+  }
+
+  if (contact.followUpCount < 3) {
+    return "Strengthen relationship";
+  }
+
+  return "Maintain regular contact";
+}
 export function ContactSheet({ open, onOpenChange, contact, initialTab = "profile" }: ContactSheetProps) {
   const isEdit = !!contact;
   const [activities, setActivities] = useState<any[]>([]);
   const [isLogging, setIsLogging] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [activityType, setActivityType] = useState<ActivityType>(ActivityType.NOTE);
-  const [activeTab, setActiveTab] = useState<"profile" | "timeline">(initialTab);
-  const [tagInput, setTagInput] = useState("");
+  const [activeTab, setActiveTab] =
+    useState<"profile" | "timeline" | "insights">(initialTab as any); const [tagInput, setTagInput] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -98,6 +182,11 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
     defaultValues: {
       name: "",
       email: "",
+      company: "",
+      linkedin: "",
+      contactType: "OTHER",
+      relationshipScore: 50,
+      interests: [],
       phone: "",
       stage: Stage.LEAD,
       priority: Priority.MEDIUM,
@@ -107,7 +196,7 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
       tags: [],
     },
   });
-  
+
   const contactName = form.watch("name") || contact?.name || "New Contact";
 
   // Reset form when contact changes
@@ -140,7 +229,7 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
   }, [contact, form]);
 
   async function onSubmit(values: ContactInput) {
-    const result = isEdit 
+    const result = isEdit
       ? await updateContact(contact.id, values)
       : await createContact(values);
 
@@ -155,7 +244,7 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
 
   async function handleLogActivity() {
     if (!newComment.trim() || !contact?.id) return;
-    
+
     setIsLogging(true);
     const result = await createActivity(contact.id, activityType, newComment);
     setIsLogging(false);
@@ -174,58 +263,70 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
       <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden border-0 shadow-2xl rounded-3xl p-0 flex flex-col bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl">
         {/* Enhanced Header */}
         <DialogHeader className="p-6 pb-2 border-b bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 relative overflow-hidden z-10 shrink-0">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 dark:bg-primary/5 rounded-bl-full -mr-8 -mt-8" />
-            <div className="flex items-center gap-4 relative mb-4">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary/80 shadow-inner">
-                <ContactIcon className="w-6 h-6" />
-              </div>
-              <div className="text-left">
-                <DialogTitle className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 truncate max-w-[400px]">
-                  {isEdit ? contactName : "Add New Contact"}
-                </DialogTitle>
-                <DialogDescription className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {isEdit 
-                    ? `Managing relationship with ${contactName}` 
-                    : "Enter details to create a new CRM record."}
-                </DialogDescription>
-              </div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 dark:bg-primary/5 rounded-bl-full -mr-8 -mt-8" />
+          <div className="flex items-center gap-4 relative mb-4">
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary/80 shadow-inner">
+              <ContactIcon className="w-6 h-6" />
             </div>
+            <div className="text-left">
+              <DialogTitle className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 truncate max-w-[400px]">
+                {isEdit ? contactName : "Add New Contact"}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {isEdit
+                  ? `Managing relationship with ${contactName}`
+                  : "Enter details to create a new CRM record."}
+              </DialogDescription>
+            </div>
+          </div>
 
-            {/* Tab Switcher */}
-            {isEdit && (
-              <div className="flex items-center gap-1 p-1 bg-slate-100/50 dark:bg-slate-900/50 rounded-xl w-fit">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("profile")}
-                  className={cn(
-                    "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
-                    activeTab === "profile" 
-                      ? "bg-white dark:bg-slate-800 text-primary shadow-sm" 
-                      : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Profile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("timeline")}
-                  className={cn(
-                    "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
-                    activeTab === "timeline" 
-                      ? "bg-white dark:bg-slate-800 text-primary shadow-sm" 
-                      : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Timeline
-                </button>
-              </div>
-            )}
-          </DialogHeader>
+          {/* Tab Switcher */}
+          {isEdit && (
+            <div className="flex items-center gap-1 p-1 bg-slate-100/50 dark:bg-slate-900/50 rounded-xl w-fit">
+              <button
+                type="button"
+                onClick={() => setActiveTab("profile")}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+                  activeTab === "profile"
+                    ? "bg-white dark:bg-slate-800 text-primary shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Profile
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("timeline")}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+                  activeTab === "timeline"
+                    ? "bg-white dark:bg-slate-800 text-primary shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Timeline
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("insights")}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+                  activeTab === "insights"
+                    ? "bg-white dark:bg-slate-800 text-primary shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Insights
+              </button>
+            </div>
+          )}
+        </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto">
-            <Form {...(form as any)}>
+        <div className="flex-1 overflow-y-auto">
+          <Form {...(form as any)}>
             <form id="contact-form" onSubmit={form.handleSubmit(onSubmit)} className="p-6">
-              
+
               {activeTab === "profile" ? (
                 <div className="space-y-6">
                   {/* Section 1: Basic Information */}
@@ -234,7 +335,7 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                       <User className="w-4 h-4 text-primary" />
                       <span>Basic Profile</span>
                     </div>
-                    
+
                     <FormField
                       control={form.control}
                       name="name"
@@ -281,6 +382,164 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                         )}
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+
+                      <FormField
+                        control={form.control}
+                        name="company"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Company</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Microsoft"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="linkedin"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>LinkedIn</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="https://linkedin.com/in/username"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                    </div>
+                  </div>
+                  {/* Relationship Details */}
+
+                  <div className="space-y-4 bg-primary/5 dark:bg-primary/10 p-5 rounded-2xl border border-primary/20">
+
+                    <div className="flex items-center gap-2 mb-4 text-sm font-semibold">
+                      <span>Relationship Details</span>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="contactType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Contact Type</FormLabel>
+
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select Type" />
+                              </SelectTrigger>
+                            </FormControl>
+
+                            <SelectContent>
+                              <SelectItem value="FRIEND">Friend</SelectItem>
+                              <SelectItem value="MENTOR">Mentor</SelectItem>
+                              <SelectItem value="PROFESSOR">Professor</SelectItem>
+                              <SelectItem value="INVESTOR">Investor</SelectItem>
+                              <SelectItem value="CLIENT">Client</SelectItem>
+                              <SelectItem value="TEAM_MEMBER">Team Member</SelectItem>
+                              <SelectItem value="OTHER">Other</SelectItem>
+                            </SelectContent>
+
+                          </Select>
+
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="interests"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                            <Tag className="w-3 h-3" /> Interests
+                          </FormLabel>
+
+                          <FormControl>
+                            <div className="space-y-2">
+
+                              {(field.value?.length || 0) > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {field.value?.map((interest: string, index: number) => (
+                                    <Badge
+                                      key={index}
+                                      variant="secondary"
+                                      className="px-2 py-1 flex items-center gap-1 text-xs"
+                                    >
+                                      {interest}
+
+                                      <button
+                                        type="button"
+                                        className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                                        onClick={() => {
+                                          const newInterests = [...(field.value || [])];
+                                          newInterests.splice(index, 1);
+                                          field.onChange(newInterests);
+                                        }}
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+
+                              <Input
+                                placeholder={
+                                  (field.value?.length || 0) >= 3
+                                    ? "Maximum interests reached"
+                                    : "Type an interest and press Enter..."
+                                }
+                                value={tagInput}
+                                disabled={(field.value?.length || 0) >= 3}
+                                onChange={(e) => setTagInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === ",") {
+                                    e.preventDefault();
+
+                                    const newInterest = tagInput.trim();
+
+                                    if (
+                                      newInterest &&
+                                      (field.value?.length || 0) < 3 &&
+                                      !field.value?.includes(newInterest)
+                                    ) {
+                                      field.onChange([
+                                        ...(field.value || []),
+                                        newInterest,
+                                      ]);
+
+                                      setTagInput("");
+                                    }
+                                  }
+                                }}
+                                className="bg-white dark:bg-slate-950 focus-visible:ring-primary"
+                              />
+
+                            </div>
+                          </FormControl>
+
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                   </div>
 
                   {/* Section 2: Pipeline Details */}
@@ -307,11 +566,10 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                                 {Object.values(Stage).map((stage) => (
                                   <SelectItem key={stage} value={stage}>
                                     <div className="flex items-center gap-2">
-                                      <div className={`w-2 h-2 rounded-full ${
-                                        stage === 'CUSTOMER' ? 'bg-green-500' : 
-                                        stage === 'LEAD' ? 'bg-blue-500' : 
-                                        stage === 'POTENTIAL' ? 'bg-yellow-500' : 'bg-red-500'
-                                      }`} />
+                                      <div className={`w-2 h-2 rounded-full ${stage === 'CUSTOMER' ? 'bg-green-500' :
+                                        stage === 'LEAD' ? 'bg-blue-500' :
+                                          stage === 'POTENTIAL' ? 'bg-yellow-500' : 'bg-red-500'
+                                        }`} />
                                       {stage.charAt(0) + stage.slice(1).toLowerCase()}
                                     </div>
                                   </SelectItem>
@@ -338,10 +596,9 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                                 {Object.values(Priority).map((priority) => (
                                   <SelectItem key={priority} value={priority}>
                                     <div className="flex items-center gap-2">
-                                      <AlertCircle className={`w-3.5 h-3.5 ${
-                                        priority === 'HIGH' ? 'text-red-500' : 
+                                      <AlertCircle className={`w-3.5 h-3.5 ${priority === 'HIGH' ? 'text-red-500' :
                                         priority === 'MEDIUM' ? 'text-yellow-500' : 'text-green-500'
-                                      }`} />
+                                        }`} />
                                       {priority.charAt(0) + priority.slice(1).toLowerCase()}
                                     </div>
                                   </SelectItem>
@@ -458,10 +715,10 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                             <AlignLeft className="w-3 h-3" /> General Notes
                           </FormLabel>
                           <FormControl>
-                            <textarea 
+                            <textarea
                               className="flex min-h-[80px] w-full rounded-xl border border-slate-200 bg-white dark:bg-slate-950 dark:border-slate-800 px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                              placeholder="General info about this contact..." 
-                              {...field} 
+                              placeholder="General info about this contact..."
+                              {...field}
                             />
                           </FormControl>
                           <FormMessage />
@@ -470,7 +727,7 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                     />
                   </div>
                 </div>
-              ) : (
+              ) : activeTab === "timeline" ? (
                 /* Timeline View */
                 <div className="space-y-6">
                   {/* Quick Log Input */}
@@ -483,8 +740,8 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                           onClick={() => setActivityType(type)}
                           className={cn(
                             "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0",
-                            activityType === type 
-                              ? "bg-primary text-primary-foreground shadow-sm" 
+                            activityType === type
+                              ? "bg-primary text-primary-foreground shadow-sm"
                               : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:border-primary/50"
                           )}
                         >
@@ -496,7 +753,7 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                         </button>
                       ))}
                     </div>
-                    
+
                     <div className="relative">
                       <textarea
                         value={newComment}
@@ -521,6 +778,86 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                     <ActivityTimeline activities={activities} />
                   </div>
                 </div>
+
+              ) : (
+
+                <div className="space-y-6">
+
+                  {/* Relationship Insights */}
+                  <div className="bg-slate-50 dark:bg-slate-900/30 p-5 rounded-2xl border">
+
+                    <h3 className="text-lg font-semibold mb-4">
+                      Relationship Insights
+                    </h3>
+
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <p className="text-sm text-slate-500">
+                          Relationship Score
+                        </p>
+
+                        <p className="text-3xl font-bold">
+                          {calculateRelationshipScore(contact)} / 100
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-slate-500">
+                          Relationship Health
+                        </p>
+
+                        <p className="text-2xl font-bold">
+                          {getRelationshipHealth(
+                            calculateRelationshipScore(contact)
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">
+                          Follow Up Count
+                        </p>
+
+                        <p className="text-3xl font-bold">
+                          {contact?.followUpCount ?? 0}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-slate-500">
+                          Last Contact
+                        </p>
+
+                        <p className="text-3xl font-bold">
+                          {contact?.lastContactedAt
+                            ? formatDistanceToNow(
+                              new Date(contact.lastContactedAt),
+                              { addSuffix: true }
+                            )
+                            : "Never"}
+                        </p>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {/* Suggested Action */}
+                  <div className="bg-primary/5 p-5 rounded-2xl border">
+
+                    <h3 className="text-lg font-semibold mb-2">
+                      <Lightbulb className="w-5 h-5 text-yellow-500" />
+                      Suggested Action
+                    </h3>
+
+                    <p className="text-slate-700 dark:text-slate-300">
+                      {getSuggestedAction(contact)}
+                    </p>
+
+                  </div>
+
+                </div>
+
               )}
             </form>
           </Form>
@@ -532,9 +869,9 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
             <X className="w-4 h-4 mr-2" /> {activeTab === "profile" ? "Cancel" : "Close"}
           </Button>
           {activeTab === "profile" && (
-            <Button 
-              form="contact-form" 
-              type="submit" 
+            <Button
+              form="contact-form"
+              type="submit"
               disabled={form.formState.isSubmitting}
               className="rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/20"
             >

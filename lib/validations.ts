@@ -4,6 +4,11 @@ import { Stage, Priority } from "@prisma/client";
 export const contactSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  company: z.string().optional(),
+  linkedin: z.string().optional(),
+  contactType: z.string().default("OTHER"),
+  relationshipScore: z.coerce.number().min(0).max(100).default(50),
+  interests: z.array(z.string()).default([]),
   phone: z.string().min(10, "Phone must be at least 10 digits").optional().or(z.literal("")),
   stage: z.nativeEnum(Stage).default(Stage.LEAD),
   priority: z.nativeEnum(Priority).default(Priority.MEDIUM),

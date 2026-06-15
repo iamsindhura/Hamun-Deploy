@@ -192,7 +192,11 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
   const [localProjects, setLocalProjects] = useState<any[]>(projects);
   const [width, setWidth] = useState(256);
   const [isResizing, setIsResizing] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   useEffect(() => {
     const savedWidth = localStorage.getItem("sidebarWidth");
     if (savedWidth) {
@@ -317,14 +321,16 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
     <>
       {/* Mobile Backdrop Overlay */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 z-30 bg-black/40 md:hidden animate-in fade-in duration-200" 
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden animate-in fade-in duration-200"
           onClick={onClose}
         />
       )}
 
-      <div 
-        style={{ width: typeof window !== "undefined" && window.innerWidth >= 768 ? `${width}px` : undefined }}
+      <div
+        style={{
+          width: mounted ? `${width}px` : undefined
+        }}
         className={cn(
           "fixed md:static inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out md:translate-x-0 relative",
           isOpen ? "translate-x-0" : "-translate-x-full",
@@ -336,10 +342,10 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
             <img src="/logo-icon.png" alt="Hamun Logo" className="h-20 w-20 object-contain rounded-xl shadow-sm" />
             <span className="text-xl font-bold tracking-tight">Hamun</span>
           </Link>
-          
+
           {onClose && (
-            <button 
-              onClick={onClose} 
+            <button
+              onClick={onClose}
               className="md:hidden p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
             >
               <X className="h-5 w-5" />

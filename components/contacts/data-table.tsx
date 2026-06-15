@@ -57,6 +57,13 @@ export interface Contact {
   name: string;
   email: string | null;
   phone: string | null;
+
+  company?: string | null;
+  linkedin?: string | null;
+  contactType?: string | null;
+  relationshipScore?: number;
+  interests?: string[];
+
   stage: Stage;
   moneyValue: number | any;
   priority: Priority;
@@ -97,7 +104,7 @@ export function DataTable({ data, onEdit }: DataTableProps) {
       cell: ({ row }) => {
         const contact = row.original;
         return (
-          <button 
+          <button
             onClick={() => onEdit(contact)}
             className="font-semibold text-purple-600 hover:text-purple-700 hover:underline px-4 transition-all"
           >
@@ -105,6 +112,22 @@ export function DataTable({ data, onEdit }: DataTableProps) {
           </button>
         );
       },
+    },
+    {
+      accessorKey: "contactType",
+      header: "Type",
+      cell: ({ row }) => (
+        <Badge variant="outline">
+          {row.original.contactType || "OTHER"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "company",
+      header: "Company",
+      cell: ({ row }) => (
+        <div>{row.original.company || "-"}</div>
+      ),
     },
     {
       accessorKey: "stage",
@@ -117,10 +140,10 @@ export function DataTable({ data, onEdit }: DataTableProps) {
               stage === "CUSTOMER"
                 ? "default"
                 : stage === "LEAD"
-                ? "outline"
-                : stage === "POTENTIAL"
-                ? "secondary"
-                : "destructive"
+                  ? "outline"
+                  : stage === "POTENTIAL"
+                    ? "secondary"
+                    : "destructive"
             }
           >
             {stage}
@@ -139,8 +162,8 @@ export function DataTable({ data, onEdit }: DataTableProps) {
               priority === "HIGH"
                 ? "bg-red-100 text-red-700 border-red-200"
                 : priority === "MEDIUM"
-                ? "bg-yellow-100 text-yellow-700 border-yellow-200"
-                : "bg-green-100 text-green-700 border-green-200"
+                  ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                  : "bg-green-100 text-green-700 border-green-200"
             }
           >
             {priority}
@@ -150,22 +173,35 @@ export function DataTable({ data, onEdit }: DataTableProps) {
     },
     {
       accessorKey: "moneyValue",
+
       header: ({ column }) => (
         <Button
           variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="p-0 h-auto font-medium"
+          onClick={() =>
+            column.toggleSorting(column.getIsSorted() === "asc")
+          }
         >
           Value (₹)
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
+
       cell: ({ row }) => {
         const amount = parseFloat(row.getValue("moneyValue"));
+
         const formatted = new Intl.NumberFormat("en-IN", {
           style: "currency",
           currency: "INR",
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
         }).format(amount);
-        return <div className="text-right font-medium pr-8">{formatted}</div>;
+
+        return (
+          <div className="font-medium">
+            {formatted}
+          </div>
+        );
       },
     },
     {
@@ -204,18 +240,18 @@ export function DataTable({ data, onEdit }: DataTableProps) {
 
         return (
           <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleWhatsApp}
               title="WhatsApp"
               className="h-8 w-8 text-green-600 hover:bg-green-50"
             >
               <MessageSquare className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleArchive}
               title={contact.isArchived ? "Restore" : "Archive"}
               className={cn("h-8 w-8", contact.isArchived ? "text-blue-600 hover:bg-blue-50" : "text-slate-600 hover:bg-slate-50")}
@@ -299,9 +335,9 @@ export function DataTable({ data, onEdit }: DataTableProps) {
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                     </TableHead>
                   );
                 })}

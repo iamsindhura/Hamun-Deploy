@@ -31,7 +31,17 @@ export async function createActivity(contactId: string, type: ActivityType, cont
         content,
       },
     });
-
+    await prisma.contact.update({
+  where: {
+    id: contactId,
+  },
+  data: {
+    followUpCount: {
+      increment: 1,
+    },
+    lastContactedAt: new Date(),
+  },
+});
     revalidatePath("/contacts");
     revalidatePath("/kanban");
 
