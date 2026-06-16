@@ -26,7 +26,7 @@ export async function createColumn(data: { name: string; position: number; proje
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
-    const project = await prisma.project.findFirst({ where: { id: data.projectId, userId: session.user.id }});
+    const project = await prisma.project.findFirst({ where: { id: data.projectId, userId: session.user.id } });
     if (!project) throw new Error("Not found");
     const column = await prisma.taskColumn.create({
       data: {
@@ -47,7 +47,7 @@ export async function updateColumn(id: string, projectId: string, data: { name: 
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
-    const project = await prisma.project.findFirst({ where: { id: projectId, userId: session.user.id }});
+    const project = await prisma.project.findFirst({ where: { id: projectId, userId: session.user.id } });
     if (!project) throw new Error("Not found");
     const column = await prisma.taskColumn.update({
       where: { id },
@@ -65,7 +65,7 @@ export async function deleteColumn(id: string, projectId: string) {
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
-    const project = await prisma.project.findFirst({ where: { id: projectId, userId: session.user.id }});
+    const project = await prisma.project.findFirst({ where: { id: projectId, userId: session.user.id } });
     if (!project) throw new Error("Not found");
     await prisma.taskColumn.delete({
       where: { id }
@@ -122,6 +122,8 @@ export async function updateTask(id: string, projectId: string, data: Partial<an
       data
     });
     revalidatePath(`/tasks/${projectId}`);
+    revalidatePath(`/tasks/today`);
+    revalidatePath(`/tasks/upcoming`);
     return { success: true, data: task };
   } catch (error) {
     return { success: false, error: "Failed to update task" };

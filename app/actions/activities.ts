@@ -32,18 +32,43 @@ export async function createActivity(contactId: string, type: ActivityType, cont
       },
     });
     await prisma.contact.update({
-  where: {
-    id: contactId,
-  },
-  data: {
-    followUpCount: {
-      increment: 1,
-    },
-    lastContactedAt: new Date(),
-  },
-});
+      where: {
+        id: contactId,
+      },
+      data: {
+        followUpCount: {
+          increment: 1,
+        },
+        lastContactedAt: new Date(),
+      },
+    });
+
+    // Auto-complete any open Follow Up tasks for this contact
+    const followUpsProject = await prisma.project.findFirst({
+      where: {
+        userId: session.user.id,
+        name: "Follow Ups"
+      }
+    });
+
+    if (followUpsProject) {
+      await prisma.task.updateMany({
+        where: {
+          contactId,
+          projectId: followUpsProject.id,
+          isCompleted: false,
+        },
+        data: {
+          isCompleted: true,
+        },
+      });
+    }
+
     revalidatePath("/contacts");
     revalidatePath("/kanban");
+    revalidatePath("/tasks");
+    revalidatePath("/tasks/today");
+    revalidatePath("/tasks/upcoming");
 
     return { success: true, data: activity };
   } catch (error) {

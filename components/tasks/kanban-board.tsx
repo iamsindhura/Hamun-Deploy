@@ -5,6 +5,8 @@ import { Task, TaskColumn, TaskPriority } from "@prisma/client";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
+import { createActivity } from "@/app/actions/activities";
+import { FollowUpDialog } from "@/components/tasks/follow-up-dialog";
 import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X, ListTodo, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,9 +76,9 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
   }
 
   return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
+    <div
+      ref={setNodeRef}
+      style={style}
       className="group relative flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
       onClick={onClick}
     >
@@ -84,8 +86,8 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
         <div {...attributes} {...listeners} className="mt-0.5 cursor-grab text-slate-300 hover:text-slate-500 transition-colors">
           <GripVertical className="h-4 w-4" />
         </div>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }} 
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}
           className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
         >
           {task.isCompleted ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <Circle className="h-5 w-5" />}
@@ -94,7 +96,7 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
           {task.title}
         </span>
       </div>
-      
+
       {(task.dueDate || task.priority !== "NONE" || (task.subtasks && task.subtasks.length > 0)) && (
         <div className="mt-2 flex items-center gap-2 pl-8 flex-wrap">
           {task.dueDate && (
@@ -104,10 +106,10 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
             </div>
           )}
           {task.priority !== "NONE" && (
-            <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-bold", 
-              task.priority === "HIGH" ? "bg-red-50 border-red-100 text-red-600" : 
-              task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" : 
-              "bg-blue-50 border-blue-100 text-blue-600"
+            <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-bold",
+              task.priority === "HIGH" ? "bg-red-50 border-red-100 text-red-600" :
+                task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" :
+                  "bg-blue-50 border-blue-100 text-blue-600"
             )}>
               <Flag className="h-3 w-3" /> {task.priority}
             </div>
@@ -128,13 +130,13 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
 
 function CompletedTaskCard({ task, onClick, onToggle }: { task: any, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
   return (
-    <div 
+    <div
       className="group relative flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50/40 p-3 shadow-none transition-all hover:bg-slate-100/40 cursor-pointer opacity-70"
       onClick={onClick}
     >
       <div className="flex items-start gap-2">
-        <button 
-          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }} 
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}
           className="mt-0.5 text-emerald-500 hover:text-emerald-600 transition-colors shrink-0"
         >
           <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-50 bg-white rounded-full" />
@@ -215,9 +217,9 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden no-scrollbar pb-2">
         <SortableContext items={activeTaskIds} strategy={verticalListSortingStrategy}>
           {activeTasks.map((task: Task) => (
-            <SortableTask 
-              key={task.id} 
-              task={task} 
+            <SortableTask
+              key={task.id}
+              task={task}
               onClick={() => onTaskClick(task)}
               onToggle={onToggleTask}
             />
@@ -240,7 +242,7 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
                 {completedTasks.length}
               </span>
             </button>
-            
+
             {isCompletedExpanded && (
               <div className="mt-2.5 flex flex-col gap-2 max-h-60 overflow-y-auto no-scrollbar pt-1">
                 {completedTasks.map((task: Task) => (
@@ -286,11 +288,14 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
+  const [activeFollowUpTask, setActiveFollowUpTask] = useState<any | null>(null);
+
   const filteredTasks = useMemo(() => {
     if (!searchQuery.trim()) return tasks;
     const query = searchQuery.toLowerCase();
-    return tasks.filter(t => 
-      t.title?.toLowerCase().includes(query) || 
+    return tasks.filter(t =>
+      t.title?.toLowerCase().includes(query) ||
       t.description?.toLowerCase().includes(query)
     );
   }, [tasks, searchQuery]);
@@ -381,8 +386,37 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
   };
 
   const toggleTaskCompletion = async (taskId: string, isCompleted: boolean) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: !isCompleted } : t));
-    await updateTask(taskId, projectId, { isCompleted: !isCompleted });
+    const isCompleting = !isCompleted;
+    const taskToToggle = tasks.find(t => t.id === taskId);
+    
+    if (isCompleting && projectName === "Follow Ups" && taskToToggle?.contactId) {
+      setActiveFollowUpTask(taskToToggle);
+      setShowFollowUpDialog(true);
+      return;
+    }
+
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: isCompleting } : t));
+    await updateTask(taskId, projectId, { isCompleted: isCompleting });
+  };
+
+  const handleFollowUpMethod = async (method: "CALL" | "EMAIL" | "MEETING" | "NONE", notes?: string) => {
+    setShowFollowUpDialog(false);
+    if (!activeFollowUpTask) return;
+
+    const task = activeFollowUpTask;
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: true } : t));
+    
+    if (method === "NONE") {
+      await updateTask(task.id, projectId, { isCompleted: true });
+    } else {
+      const baseContent = method === "CALL" ? "Follow-up call completed" 
+                    : method === "EMAIL" ? "Follow-up email sent" 
+                    : "Follow-up meeting completed";
+      
+      const content = notes ? `${baseContent}\n\n${notes}` : baseContent;
+      await createActivity(task.contactId, method as any, content);
+    }
+    setActiveFollowUpTask(null);
   };
 
   const onDragStart = (event: DragStartEvent) => {
@@ -399,7 +433,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
   const onDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
-    
+
     const activeId = active.id;
     const overId = over.id;
     if (activeId === overId) return;
@@ -415,7 +449,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       setTasks(tasks => {
         const activeIndex = tasks.findIndex(t => t.id === activeId);
         const overIndex = tasks.findIndex(t => t.id === overId);
-        
+
         if (tasks[activeIndex].columnId !== tasks[overIndex].columnId) {
           const newTasks = [...tasks];
           newTasks[activeIndex] = { ...newTasks[activeIndex], columnId: newTasks[overIndex].columnId };
@@ -460,7 +494,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       const movedTask = tasks.find(t => t.id === activeId);
       if (movedTask) {
         const position = tasks.filter(t => t.columnId === movedTask.columnId).findIndex(t => t.id === activeId);
-        updateTask(movedTask.id, projectId, { 
+        updateTask(movedTask.id, projectId, {
           columnId: movedTask.columnId,
           position: position >= 0 ? position : 0
         });
@@ -527,11 +561,11 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
           <div className="flex h-full gap-4 overflow-x-auto p-4 pb-8 items-start">
             <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
               {columns.map((column, index) => (
-                <SortableColumn 
-                  key={column.id} 
-                  column={column} 
+                <SortableColumn
+                  key={column.id}
+                  column={column}
                   index={index}
-                  tasks={filteredTasks.filter(t => t.columnId === column.id)} 
+                  tasks={filteredTasks.filter(t => t.columnId === column.id)}
                   onAddTask={handleAddTask}
                   onToggleTask={toggleTaskCompletion}
                   onTaskClick={setSelectedTask}
@@ -571,21 +605,21 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
 
           <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: "0.4" } } }) }}>
             {activeColumn && (
-              <SortableColumn 
-                column={activeColumn} 
-                tasks={filteredTasks.filter(t => t.columnId === activeColumn.id)} 
-                onAddTask={() => {}}
-                onToggleTask={() => {}}
-                onTaskClick={() => {}}
-                onRename={() => {}}
-                onDelete={() => {}}
+              <SortableColumn
+                column={activeColumn}
+                tasks={filteredTasks.filter(t => t.columnId === activeColumn.id)}
+                onAddTask={() => { }}
+                onToggleTask={() => { }}
+                onTaskClick={() => { }}
+                onRename={() => { }}
+                onDelete={() => { }}
               />
             )}
             {activeTask && (
-              <SortableTask 
-                task={activeTask} 
-                onClick={() => {}}
-                onToggle={() => {}}
+              <SortableTask
+                task={activeTask}
+                onClick={() => { }}
+                onToggle={() => { }}
               />
             )}
           </DragOverlay>
@@ -604,7 +638,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       {isFocusMode && columns.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/95" onClick={() => setIsFocusMode(false)} />
-          
+
           <div className="relative z-10 flex items-center gap-6 max-w-4xl w-full">
             <Button
               variant="outline"
@@ -662,17 +696,17 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                   filteredTasks
                     .filter(t => t.columnId === columns[focusColumnIndex].id && !t.isCompleted)
                     .map((task) => (
-                      <div 
+                      <div
                         key={task.id}
                         onClick={() => setSelectedTask(task)}
                         className="group flex flex-col gap-2 rounded-xl border border-slate-100 bg-white p-4 shadow-sm hover:border-slate-200 transition-all cursor-pointer"
                       >
                         <div className="flex items-start gap-3">
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              toggleTaskCompletion(task.id, task.isCompleted); 
-                            }} 
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTaskCompletion(task.id, task.isCompleted);
+                            }}
                             className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
                           >
                             <Circle className="h-5 w-5" />
@@ -690,10 +724,10 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                               </div>
                             )}
                             {task.priority !== "NONE" && (
-                              <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-bold", 
-                                task.priority === "HIGH" ? "bg-red-50 border-red-100 text-red-600" : 
-                                task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" : 
-                                "bg-blue-50 border-blue-100 text-blue-600"
+                              <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-bold",
+                                task.priority === "HIGH" ? "bg-red-50 border-red-100 text-red-600" :
+                                  task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" :
+                                    "bg-blue-50 border-blue-100 text-blue-600"
                               )}>
                                 <Flag className="h-3 w-3" /> {task.priority}
                               </div>
@@ -719,16 +753,16 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                       {filteredTasks
                         .filter(t => t.columnId === columns[focusColumnIndex].id && t.isCompleted)
                         .map((task) => (
-                          <div 
+                          <div
                             key={task.id}
                             onClick={() => setSelectedTask(task)}
                             className="group flex items-start gap-3 rounded-xl border border-slate-100/50 bg-slate-50/30 p-3 shadow-none opacity-60 hover:opacity-80 transition-all cursor-pointer"
                           >
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                toggleTaskCompletion(task.id, task.isCompleted); 
-                              }} 
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTaskCompletion(task.id, task.isCompleted);
+                              }}
                               className="mt-0.5 text-emerald-500 transition-colors shrink-0"
                             >
                               <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-50 bg-white rounded-full" />
@@ -744,10 +778,10 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
               </div>
 
               <div className="p-4 bg-slate-50/50 border-t border-slate-100">
-                <QuickAddTask 
-                  columnId={columns[focusColumnIndex].id} 
-                  projectId={projectId} 
-                  onAdd={(title) => handleAddTask(title, columns[focusColumnIndex].id)} 
+                <QuickAddTask
+                  columnId={columns[focusColumnIndex].id}
+                  projectId={projectId}
+                  onAdd={(title) => handleAddTask(title, columns[focusColumnIndex].id)}
                 />
               </div>
             </div>
@@ -763,6 +797,15 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
             </Button>
           </div>
         </div>
+      )}
+
+      {showFollowUpDialog && activeFollowUpTask && (
+        <FollowUpDialog 
+          isOpen={showFollowUpDialog} 
+          onOpenChange={setShowFollowUpDialog} 
+          onSelectMethod={handleFollowUpMethod} 
+          contactName={activeFollowUpTask.title.replace("Follow up with ", "")} 
+        />
       )}
     </div>
   );

@@ -14,6 +14,7 @@ import {
   DragEndEvent,
   defaultDropAnimationSideEffects,
   DropAnimation,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -53,6 +54,10 @@ export function KanbanBoard({ initialData }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<KanbanContact | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  React.useEffect(() => {
+    setContacts(initialData);
+  }, [initialData]);
 
   const handleCardClick = (contact: KanbanContact) => {
     setSelectedContact(contact);
@@ -166,9 +171,13 @@ const STAGE_COLORS: Record<string, { bg: string, border: string, text: string }>
 
 function KanbanColumn({ id, title, contacts, onCardClick }: { id: string, title: string, contacts: KanbanContact[], onCardClick: (c: KanbanContact) => void }) {
   const colors = STAGE_COLORS[id] || { bg: "bg-slate-50", border: "border-t-slate-500", text: "text-slate-700" };
+  const { setNodeRef } = useDroppable({ id });
 
   return (
-    <div className={cn("flex w-80 shrink-0 flex-col gap-4 rounded-xl border-t-[4px] p-4 shadow-sm", colors.bg, colors.border)}>
+    <div 
+      ref={setNodeRef}
+      className={cn("flex w-80 shrink-0 flex-col gap-4 rounded-xl border-t-[4px] p-4 shadow-sm", colors.bg, colors.border)}
+    >
       <div className="flex items-center justify-between">
         <h3 className={cn("font-bold tracking-wide", colors.text)}>{title}</h3>
         <Badge variant="outline" className={cn("bg-white shadow-sm font-semibold", colors.text)}>

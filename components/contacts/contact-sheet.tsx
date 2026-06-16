@@ -122,6 +122,10 @@ function getSuggestedAction(contact: any) {
       (1000 * 60 * 60 * 24)
     );
 
+  if (days <= 7) {
+    return "Recently contacted. No immediate action needed.";
+  }
+
   if (days > 30) {
     return "Reconnect immediately";
   }
@@ -157,57 +161,11 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
   const [activeTab, setActiveTab] =
     useState<"profile" | "timeline" | "insights">(initialTab as any); const [tagInput, setTagInput] = useState("");
 
-  const [projects, setProjects] = useState<any[]>([]);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [taskProjectId, setTaskProjectId] = useState("");
-  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
-
-  const fetchProjects = useCallback(async () => {
-    try {
-      const data = await getProjects();
-      if (data.success && data.data) {
-        setProjects(data.data);
-        if (data.data.length > 0) setTaskProjectId(data.data[0].id);
-      }
-    } catch (error) {
-      console.error("Failed to fetch projects:", error);
-    }
-  }, []);
-
   useEffect(() => {
     if (open) {
       setActiveTab(initialTab);
-      fetchProjects();
     }
-  }, [open, initialTab, fetchProjects]);
-
-  async function handleCreateTask() {
-    if (!contact?.id || !taskProjectId) return;
-    setIsSubmittingTask(true);
-    
-    const suggested = getSuggestedAction(contact);
-    
-    // Default due date to today
-    const dueDate = new Date();
-
-    const result = await createTask({
-      title: suggested,
-      projectId: taskProjectId,
-      contactId: contact.id,
-      dueDate,
-      priority: TaskPriority.MEDIUM,
-      position: 0,
-    });
-    
-    setIsSubmittingTask(false);
-    
-    if (result.success) {
-      toast.success("Task created");
-      setIsCreatingTask(false);
-    } else {
-      toast.error(result.error || "Failed to create task");
-    }
-  }
+  }, [open, initialTab]);
 
   const fetchActivities = useCallback(async () => {
     if (contact?.id) {
@@ -247,13 +205,16 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
 
   const contactName = form.watch("name") || contact?.name || "New Contact";
 
-  // Reset form when contact changes
   useEffect(() => {
     if (contact) {
       form.reset({
         name: contact.name,
         email: contact.email || "",
         phone: contact.phone || "",
+        company: contact.company || "",
+        linkedin: contact.linkedin || "",
+        contactType: contact.contactType || "OTHER",
+        interests: contact.interests || [],
         stage: contact.stage,
         priority: contact.priority,
         moneyValue: Number(contact.moneyValue),
@@ -266,6 +227,10 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
         name: "",
         email: "",
         phone: "",
+        company: "",
+        linkedin: "",
+        contactType: "OTHER",
+        interests: [],
         stage: Stage.LEAD,
         priority: Priority.MEDIUM,
         moneyValue: 0,
@@ -893,47 +858,14 @@ export function ContactSheet({ open, onOpenChange, contact, initialTab = "profil
                   {/* Suggested Action */}
                   <div className="bg-primary/5 p-5 rounded-2xl border">
 
-                    <h3 className="text-lg font-semibold mb-2 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Lightbulb className="w-5 h-5 text-yellow-500" />
-                        Suggested Action
-                      </div>
-                      {contact && (
-                        <Button type="button" size="sm" variant="outline" onClick={() => setIsCreatingTask(!isCreatingTask)}>
-                          {isCreatingTask ? "Cancel" : "Create Task"}
-                        </Button>
-                      )}
+                    <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                      <Lightbulb className="w-5 h-5 text-yellow-500" />
+                      Suggested Action
                     </h3>
 
                     <p className="text-slate-700 dark:text-slate-300">
                       {getSuggestedAction(contact)}
                     </p>
-                    
-                    {isCreatingTask && (
-                      <div className="mt-4 pt-4 border-t border-primary/10 space-y-3">
-                        <div className="grid gap-2">
-                          <label className="text-xs font-semibold text-slate-500">Add to Project</label>
-                          <Select value={taskProjectId} onValueChange={setTaskProjectId}>
-                            <SelectTrigger className="bg-white dark:bg-slate-950">
-                              <SelectValue placeholder="Select a project">
-                                {projects.find((p) => p.id === taskProjectId)?.name || "Select a project"}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {projects.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                              ))}
-                              {projects.length === 0 && (
-                                <SelectItem value="none" disabled>No projects found</SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button type="button" onClick={handleCreateTask} disabled={isSubmittingTask || !taskProjectId || taskProjectId === "none"} className="w-full">
-                          {isSubmittingTask ? "Creating..." : "Confirm Task"}
-                        </Button>
-                      </div>
-                    )}
                   </div>
 
                 </div>

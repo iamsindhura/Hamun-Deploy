@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { ResponsiveLayout } from "@/components/layout/responsive-layout";
+import { AutoFollowUpTrigger } from "@/components/contacts/auto-followup-trigger";
 
 import { prisma } from "@/lib/prisma";
 
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
 
   return (
     <ResponsiveLayout projects={serializedProjects}>
+      <AutoFollowUpTrigger />
       {children}
     </ResponsiveLayout>
   );

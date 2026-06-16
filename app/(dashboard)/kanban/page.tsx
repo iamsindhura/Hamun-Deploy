@@ -14,13 +14,14 @@ export default async function KanbanPage() {
       userId: session.user.id,
       isArchived: false,
     },
-    select: {
-      id: true,
-      name: true,
-      moneyValue: true,
-      priority: true,
-      phone: true,
-      stage: true,
+    include: {
+      activities: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
     },
   });
 

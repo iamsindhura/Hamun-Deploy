@@ -170,8 +170,32 @@ export async function logContact(id: string) {
       },
     });
 
+    // Auto-complete any open Follow Up tasks for this contact
+    const followUpsProject = await prisma.project.findFirst({
+      where: {
+        userId: session.user.id,
+        name: "Follow Ups"
+      }
+    });
+
+    if (followUpsProject) {
+      await prisma.task.updateMany({
+        where: {
+          contactId: id,
+          projectId: followUpsProject.id,
+          isCompleted: false,
+        },
+        data: {
+          isCompleted: true,
+        },
+      });
+    }
+
     revalidatePath("/contacts");
     revalidatePath("/kanban");
+    revalidatePath("/tasks");
+    revalidatePath("/tasks/today");
+    revalidatePath("/tasks/upcoming");
 
     return { success: true, data: serializeContact(contact) };
   } catch (error) {
