@@ -338,7 +338,8 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       columnId,
       userId: "",
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      contactId: null,
     };
     setTasks([...tasks, newTask]);
 
@@ -388,7 +389,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
   const toggleTaskCompletion = async (taskId: string, isCompleted: boolean) => {
     const isCompleting = !isCompleted;
     const taskToToggle = tasks.find(t => t.id === taskId);
-    
+
     if (isCompleting && projectName === "Follow Ups" && taskToToggle?.contactId) {
       setActiveFollowUpTask(taskToToggle);
       setShowFollowUpDialog(true);
@@ -405,14 +406,14 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
 
     const task = activeFollowUpTask;
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: true } : t));
-    
+
     if (method === "NONE") {
       await updateTask(task.id, projectId, { isCompleted: true });
     } else {
-      const baseContent = method === "CALL" ? "Follow-up call completed" 
-                    : method === "EMAIL" ? "Follow-up email sent" 
-                    : "Follow-up meeting completed";
-      
+      const baseContent = method === "CALL" ? "Follow-up call completed"
+        : method === "EMAIL" ? "Follow-up email sent"
+          : "Follow-up meeting completed";
+
       const content = notes ? `${baseContent}\n\n${notes}` : baseContent;
       await createActivity(task.contactId, method as any, content);
     }
@@ -800,11 +801,11 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       )}
 
       {showFollowUpDialog && activeFollowUpTask && (
-        <FollowUpDialog 
-          isOpen={showFollowUpDialog} 
-          onOpenChange={setShowFollowUpDialog} 
-          onSelectMethod={handleFollowUpMethod} 
-          contactName={activeFollowUpTask.title.replace("Follow up with ", "")} 
+        <FollowUpDialog
+          isOpen={showFollowUpDialog}
+          onOpenChange={setShowFollowUpDialog}
+          onSelectMethod={handleFollowUpMethod}
+          contactName={activeFollowUpTask.title.replace("Follow up with ", "")}
         />
       )}
     </div>

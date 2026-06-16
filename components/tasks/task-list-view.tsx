@@ -124,8 +124,8 @@ export function TaskListView({ tasks: initialTasks, showDate = false }: TaskList
           task={selectedTask}
           projectId={selectedTask.projectId}
           onClose={() => setSelectedTask(null)}
-          onUpdate={(taskId, updates) => {
-            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+          onUpdate={(updatedTask) => {
+            setTasks(prev => prev.map(t => t.id === updatedTask.id ? { ...t, ...updatedTask } : t));
           }}
           onDelete={handleDeleteTask}
         />
