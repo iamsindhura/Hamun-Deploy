@@ -85,7 +85,7 @@ export async function getTasks(projectId: string) {
   try {
     const tasks = await prisma.task.findMany({
       where: { projectId, userId: session.user.id },
-      include: { subtasks: true },
+      include: { subtasks: true, contact: true },
       orderBy: { position: "asc" }
     });
     return { success: true, data: tasks };
@@ -94,7 +94,7 @@ export async function getTasks(projectId: string) {
   }
 }
 
-export async function createTask(data: { title: string; description?: string; columnId?: string; projectId: string; dueDate?: Date; priority?: TaskPriority; isPinned?: boolean; position: number }) {
+export async function createTask(data: { title: string; description?: string; columnId?: string; projectId: string; dueDate?: Date; priority?: TaskPriority; isPinned?: boolean; position: number; contactId?: string }) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 

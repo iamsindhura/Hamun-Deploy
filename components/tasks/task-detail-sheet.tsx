@@ -144,6 +144,21 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
             />
           </div>
 
+          {task.contact && (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Linked Contact</label>
+              <div className="flex items-center gap-2 p-3 bg-slate-50 border rounded-lg">
+                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                  {task.contact.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-sm font-medium">{task.contact.name}</div>
+                  {task.contact.company && <div className="text-xs text-muted-foreground">{task.contact.company}</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Description</label>
             <textarea 

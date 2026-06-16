@@ -84,6 +84,7 @@ model Contact {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   activities      Activity[]
+  tasks           Task[]
   user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, stage])
@@ -159,11 +160,14 @@ model Task {
   column      TaskColumn?  @relation(fields: [columnId], references: [id])
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([columnId])
   @@index([userId])
   @@index([dueDate])
+  @@index([contactId])
 }
 
 model Subtask {
