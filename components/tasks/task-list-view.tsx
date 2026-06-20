@@ -95,11 +95,22 @@ export function TaskListView({ tasks: initialTasks, showDate = false }: TaskList
                 <div className={cn("font-medium transition-all", task.isCompleted && "text-muted-foreground line-through")}>
                   {task.title}
                 </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
-                  {showDate && task.dueDate && (
+                <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1 flex-wrap">
+                  {task.startTime && task.endTime && (
+                    <span className="flex items-center gap-1 font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  )}
+                  {showDate && !task.startTime && task.dueDate && (
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {new Date(task.dueDate).toLocaleDateString()}
+                    </span>
+                  )}
+                  {task.taskType && task.taskType !== "GENERAL" && (
+                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold border border-slate-200">
+                      [{task.taskType}]
                     </span>
                   )}
                   {task.project?.name && (

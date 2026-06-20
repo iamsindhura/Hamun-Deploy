@@ -18,15 +18,25 @@ export default async function TodayTasksPage() {
   const tasks = await prisma.task.findMany({
     where: {
       userId: session.user.id,
-      dueDate: {
-        gte: today,
-        lt: tomorrow,
-      },
+      OR: [
+        {
+          startTime: {
+            gte: today,
+            lt: tomorrow,
+          }
+        },
+        {
+          dueDate: {
+            gte: today,
+            lt: tomorrow,
+          }
+        }
+      ]
     },
     include: {
       project: true,
     },
-    orderBy: { priority: "desc" },
+    orderBy: { startTime: "asc" },
   });
 
   return (

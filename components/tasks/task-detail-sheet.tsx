@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Task, TaskPriority } from "@prisma/client";
+import { Task, TaskPriority, TaskType } from "@prisma/client";
 import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask } from "@/app/actions/tasks";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Flag, Trash2, CheckCircle2, Circle, Plus } from "lucide-react";
 
 interface TaskDetailSheetProps {
@@ -21,8 +22,12 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("NONE");
   const [dueDate, setDueDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [taskType, setTaskType] = useState<TaskType>("GENERAL");
   const [subtasks, setSubtasks] = useState<any[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [error, setError] = useState("");
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
@@ -30,6 +35,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       setTitle(task.title);
       setDescription(task.description || "");
       setPriority(task.priority);
+      setTaskType(task.taskType || "GENERAL");
       setSubtasks(task.subtasks || []);
       if (task.dueDate) {
         const d = new Date(task.dueDate);
@@ -40,15 +46,28 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       } else {
         setDueDate("");
       }
+      
+      const formatLocalTime = (dateStr: string) => {
+        const d = new Date(dateStr);
+        // Format to YYYY-MM-DDThh:mm
+        const offset = d.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(d.getTime() - offset)).toISOString().slice(0, 16);
+        return localISOTime;
+      };
+
+      setStartTime(task.startTime ? formatLocalTime(task.startTime) : "");
+      setEndTime(task.endTime ? formatLocalTime(task.endTime) : "");
+      setError("");
     }
   }, [task]);
 
   if (!task) return null;
 
-  const handleSave = async (updates: Partial<Task> = {}) => {
+  const handleSave = async (updates: Partial<any> = {}) => {
     const finalTitle = updates.title !== undefined ? updates.title : title;
     const finalDesc = updates.description !== undefined ? updates.description : description;
     const finalPriority = updates.priority !== undefined ? updates.priority : priority;
+    const finalTaskType = updates.taskType !== undefined ? updates.taskType : taskType;
     
     let finalDueDate: Date | null = null;
     if (updates.dueDate !== undefined) {
@@ -57,17 +76,38 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       finalDueDate = dueDate ? new Date(dueDate) : null;
     }
 
-    const updated = { ...task, title: finalTitle, description: finalDesc, priority: finalPriority, dueDate: finalDueDate };
-    onUpdate(updated); // optimistic
+    let finalStartTime: Date | null = updates.startTime !== undefined ? updates.startTime : (startTime ? new Date(startTime) : null);
+    let finalEndTime: Date | null = updates.endTime !== undefined ? updates.endTime : (endTime ? new Date(endTime) : null);
+
+    const updated = { 
+      ...task, 
+      title: finalTitle, 
+      description: finalDesc, 
+      priority: finalPriority, 
+      dueDate: finalDueDate,
+      taskType: finalTaskType,
+      startTime: finalStartTime,
+      endTime: finalEndTime
+    };
+
+    onUpdate(updated);
 
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
-      await updateTask(task.id, projectId, { 
+      const result = await updateTask(task.id, projectId, { 
         title: finalTitle, 
         description: finalDesc, 
         priority: finalPriority,
-        dueDate: finalDueDate
+        dueDate: finalDueDate,
+        taskType: finalTaskType,
+        startTime: finalStartTime,
+        endTime: finalEndTime
       });
+      if (!result.success) {
+        setError(result.error || "Failed to update task");
+      } else {
+        setError("");
+      }
     }, 500);
   };
 
@@ -81,6 +121,22 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
   const handlePriorityChange = (newPriority: TaskPriority) => {
     setPriority(newPriority);
     handleSave({ priority: newPriority });
+  };
+
+  const handleTaskTypeChange = (newType: string | null) => {
+    if (!newType) return;
+    setTaskType(newType as TaskType);
+    handleSave({ taskType: newType as TaskType });
+  };
+
+  const handleTimeChange = (type: "start" | "end", val: string) => {
+    if (type === "start") {
+      setStartTime(val);
+      handleSave({ startTime: val ? new Date(val) : null });
+    } else {
+      setEndTime(val);
+      handleSave({ endTime: val ? new Date(val) : null });
+    }
   };
 
   const handleDelete = async () => {
@@ -180,6 +236,46 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Start Time</label>
+              <Input 
+                type="datetime-local"
+                className="text-base font-medium h-12 bg-white"
+                value={startTime}
+                onChange={(e) => handleTimeChange("start", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">End Time</label>
+              <Input 
+                type="datetime-local"
+                className="text-base font-medium h-12 bg-white"
+                value={endTime}
+                onChange={(e) => handleTimeChange("end", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Task Type</label>
+            <Select value={taskType} onValueChange={(val) => {
+              console.log("Dropdown selected value:", val, "Current taskType state:", taskType);
+              handleTaskTypeChange(val);
+            }}>
+              <SelectTrigger className="h-12 bg-white">
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent className="z-[200]">
+                <SelectItem value="GENERAL">General</SelectItem>
+                <SelectItem value="CRM">CRM</SelectItem>
+                <SelectItem value="MEETING">Meeting</SelectItem>
+                <SelectItem value="DEEP_WORK">Deep Work</SelectItem>
+                <SelectItem value="HABIT">Habit</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Priority</label>
             <div className="flex flex-wrap gap-2">
@@ -248,6 +344,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               </Button>
             </form>
           </div>
+          {error && <div className="text-sm text-red-500 font-medium p-2 bg-red-50 rounded-md">{error}</div>}
         </div>
 
         <div className="p-4 border-t bg-white flex items-center justify-between mt-auto">

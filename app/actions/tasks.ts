@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { TaskPriority } from "@prisma/client";
+import { TaskPriority, TaskType } from "@prisma/client";
 
 // Columns
 export async function getColumns(projectId: string) {
@@ -94,11 +94,34 @@ export async function getTasks(projectId: string) {
   }
 }
 
-export async function createTask(data: { title: string; description?: string; columnId?: string; projectId: string; dueDate?: Date; priority?: TaskPriority; isPinned?: boolean; position: number; contactId?: string }) {
+export async function createTask(data: { title: string; description?: string; columnId?: string; projectId: string; dueDate?: Date; priority?: TaskPriority; isPinned?: boolean; position: number; contactId?: string; startTime?: Date; endTime?: Date; taskType?: TaskType }) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
+    console.log("createTask called with:", { 
+      taskType: data.taskType, 
+      startTime: data.startTime, 
+      endTime: data.endTime, 
+      dueDate: data.dueDate 
+    });
+
+    if (data.startTime && data.endTime) {
+      if (new Date(data.endTime) <= new Date(data.startTime)) {
+        return { success: false, error: "End time must be after start time." };
+      }
+      const conflict = await prisma.task.findFirst({
+        where: {
+          userId: session.user.id,
+          startTime: { lt: data.endTime },
+          endTime: { gt: data.startTime }
+        }
+      });
+      if (conflict) {
+        return { success: false, error: "Scheduling Conflict" };
+      }
+    }
+
     const task = await prisma.task.create({
       data: {
         ...data,
@@ -117,6 +140,38 @@ export async function updateTask(id: string, projectId: string, data: Partial<an
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
+    console.log("updateTask called with:", { 
+      id,
+      taskType: data.taskType, 
+      startTime: data.startTime, 
+      endTime: data.endTime, 
+      dueDate: data.dueDate 
+    });
+    // If updating timeboxing, we need to check conflicts, but only if both times are provided or if we fetch the current task to compare.
+    // For simplicity, if startTime or endTime is in data, we fetch the final times to validate.
+    if (data.startTime !== undefined || data.endTime !== undefined) {
+      const currentTask = await prisma.task.findUnique({ where: { id } });
+      const finalStartTime = data.startTime !== undefined ? data.startTime : currentTask?.startTime;
+      const finalEndTime = data.endTime !== undefined ? data.endTime : currentTask?.endTime;
+      
+      if (finalStartTime && finalEndTime) {
+        if (new Date(finalEndTime) <= new Date(finalStartTime)) {
+          return { success: false, error: "End time must be after start time." };
+        }
+        const conflict = await prisma.task.findFirst({
+          where: {
+            userId: session.user.id,
+            id: { not: id },
+            startTime: { lt: finalEndTime },
+            endTime: { gt: finalStartTime }
+          }
+        });
+        if (conflict) {
+          return { success: false, error: "Scheduling Conflict" };
+        }
+      }
+    }
+
     const task = await prisma.task.update({
       where: { id, userId: session.user.id },
       data

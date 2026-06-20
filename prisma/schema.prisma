@@ -156,6 +156,9 @@ model Task {
   userId      String
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  startTime   DateTime?
+  endTime     DateTime?
+  taskType    TaskType     @default(GENERAL)
   subtasks    Subtask[]
   column      TaskColumn?  @relation(fields: [columnId], references: [id])
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -210,4 +213,12 @@ enum TaskPriority {
   LOW
   MEDIUM
   HIGH
+}
+
+enum TaskType {
+  GENERAL
+  CRM
+  MEETING
+  DEEP_WORK
+  HABIT
 }

@@ -18,24 +18,54 @@ export default async function UpcomingTasksPage() {
   const tasks = await prisma.task.findMany({
     where: {
       userId: session.user.id,
-      dueDate: {
-        gte: today,
-        lt: nextWeek,
-      },
+      OR: [
+        {
+          startTime: {
+            gte: today,
+            lt: nextWeek,
+          }
+        },
+        {
+          dueDate: {
+            gte: today,
+            lt: nextWeek,
+          }
+        }
+      ]
     },
     include: {
       project: true,
     },
-    orderBy: { dueDate: "asc" },
+    orderBy: [
+      { startTime: "asc" }
+    ],
   });
+
+  const groupedTasks = tasks.reduce((acc: Record<string, typeof tasks>, task) => {
+    const dateToUse = task.startTime || task.dueDate;
+    const dateStr = dateToUse ? new Date(dateToUse).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) : "No Date";
+    if (!acc[dateStr]) acc[dateStr] = [];
+    acc[dateStr].push(task);
+    return acc;
+  }, {});
 
   return (
     <div className="flex h-full flex-col bg-white">
       <div className="flex h-14 items-center border-b px-6">
         <h1 className="text-lg font-semibold">Next 7 Days</h1>
       </div>
-      <div className="flex-1 overflow-y-auto p-6">
-        <TaskListView tasks={tasks} showDate />
+      <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        {Object.entries(groupedTasks).map(([dateStr, dateTasks]) => (
+          <div key={dateStr} className="space-y-3">
+            <h2 className="font-bold text-slate-800 text-lg border-b pb-2">{dateStr}</h2>
+            <TaskListView tasks={dateTasks} />
+          </div>
+        ))}
+        {tasks.length === 0 && (
+          <div className="text-center text-muted-foreground mt-10">
+            No upcoming tasks found.
+          </div>
+        )}
       </div>
     </div>
   );

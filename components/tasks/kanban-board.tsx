@@ -97,12 +97,23 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
         </span>
       </div>
 
-      {(task.dueDate || task.priority !== "NONE" || (task.subtasks && task.subtasks.length > 0)) && (
+      {(task.dueDate || task.startTime || task.taskType !== "GENERAL" || task.priority !== "NONE" || (task.subtasks && task.subtasks.length > 0)) && (
         <div className="mt-2 flex items-center gap-2 pl-8 flex-wrap">
-          {task.dueDate && (
+          {task.startTime && task.endTime && (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 rounded-md border border-indigo-100 text-xs font-bold text-indigo-600">
+              <Calendar className="h-3 w-3" />
+              {new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            </div>
+          )}
+          {!task.startTime && task.dueDate && (
             <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-medium text-slate-500">
               <Calendar className="h-3 w-3" />
               {formatDueDate(task.dueDate)}
+            </div>
+          )}
+          {task.taskType && task.taskType !== "GENERAL" && (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-md border border-slate-200 text-xs font-bold text-slate-600">
+              [{task.taskType}]
             </div>
           )}
           {task.priority !== "NONE" && (
@@ -111,7 +122,7 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
                 task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" :
                   "bg-blue-50 border-blue-100 text-blue-600"
             )}>
-              <Flag className="h-3 w-3" /> {task.priority}
+              <Flag className="h-3 w-3" /> [{task.priority}]
             </div>
           )}
           {task.subtasks && task.subtasks.length > 0 && (
@@ -260,7 +271,7 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
       </div>
 
       <div className="mt-2">
-        <QuickAddTask columnId={column.id} projectId={column.projectId} onAdd={(title) => onAddTask(title, column.id)} />
+        <QuickAddTask columnId={column.id} projectId={column.projectId} onAdd={(data) => onAddTask(data, column.id)} />
       </div>
     </div>
   );
@@ -322,16 +333,19 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const handleAddTask = async (title: string, columnId: string) => {
+  const handleAddTask = async (data: { title: string; startTime: Date; endTime: Date; priority: TaskPriority; taskType: any }, columnId: string) => {
     const tempId = `temp-${Date.now()}`;
     const newTask: Task = {
       id: tempId,
-      title,
+      title: data.title,
       description: null,
       isCompleted: false,
       dueDate: null,
       reminderAt: null,
-      priority: TaskPriority.NONE,
+      priority: data.priority,
+      taskType: data.taskType,
+      startTime: data.startTime,
+      endTime: data.endTime,
       isPinned: false,
       position: tasks.filter(t => t.columnId === columnId).length,
       projectId,
@@ -343,9 +357,13 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
     };
     setTasks([...tasks, newTask]);
 
-    const result = await createTask({ title, columnId, projectId, position: newTask.position });
+    const result = await createTask({ ...data, columnId, projectId, position: newTask.position });
     if (result.success && result.data) {
       setTasks(prev => prev.map(t => t.id === tempId ? result.data as Task : t));
+      return { success: true };
+    } else {
+      setTasks(prev => prev.filter(t => t.id !== tempId));
+      return { success: false, error: result.error };
     }
   };
 
@@ -782,7 +800,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                 <QuickAddTask
                   columnId={columns[focusColumnIndex].id}
                   projectId={projectId}
-                  onAdd={(title) => handleAddTask(title, columns[focusColumnIndex].id)}
+                  onAdd={(data) => handleAddTask(data, columns[focusColumnIndex].id)}
                 />
               </div>
             </div>
