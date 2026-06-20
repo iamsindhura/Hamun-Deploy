@@ -30,6 +30,14 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    const offset = now.getTimezoneOffset() * 60000;
+    return (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+  };
+  const minDateTime = getMinDateTime();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -41,6 +49,11 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
 
     const start = new Date(startTime);
     const end = new Date(endTime);
+
+    if (start <= new Date()) {
+      setError("Tasks can only be scheduled in the future.");
+      return;
+    }
 
     if (end <= start) {
       setError("End time must be after start time.");
@@ -97,6 +110,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
                 type="datetime-local"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
+                min={minDateTime}
                 required
               />
             </div>
@@ -106,6 +120,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
                 type="datetime-local"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
+                min={startTime || minDateTime}
                 required
               />
             </div>

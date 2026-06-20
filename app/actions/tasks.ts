@@ -107,6 +107,9 @@ export async function createTask(data: { title: string; description?: string; co
     });
 
     if (data.startTime && data.endTime) {
+      if (new Date(data.startTime) <= new Date()) {
+        return { success: false, error: "Tasks can only be scheduled in the future." };
+      }
       if (new Date(data.endTime) <= new Date(data.startTime)) {
         return { success: false, error: "End time must be after start time." };
       }
@@ -155,6 +158,9 @@ export async function updateTask(id: string, projectId: string, data: Partial<an
       const finalEndTime = data.endTime !== undefined ? data.endTime : currentTask?.endTime;
       
       if (finalStartTime && finalEndTime) {
+        if (new Date(finalStartTime) <= new Date()) {
+          return { success: false, error: "Tasks can only be scheduled in the future." };
+        }
         if (new Date(finalEndTime) <= new Date(finalStartTime)) {
           return { success: false, error: "End time must be after start time." };
         }

@@ -79,6 +79,16 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
     let finalStartTime: Date | null = updates.startTime !== undefined ? updates.startTime : (startTime ? new Date(startTime) : null);
     let finalEndTime: Date | null = updates.endTime !== undefined ? updates.endTime : (endTime ? new Date(endTime) : null);
 
+    if (finalStartTime && finalStartTime <= new Date()) {
+      setError("Tasks can only be scheduled in the future.");
+      return;
+    }
+
+    if (finalStartTime && finalEndTime && finalEndTime <= finalStartTime) {
+      setError("End time must be after start time.");
+      return;
+    }
+
     const updated = { 
       ...task, 
       title: finalTitle, 
@@ -174,6 +184,14 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
     await deleteSubtask(subtaskId, projectId);
   };
 
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    const offset = now.getTimezoneOffset() * 60000;
+    return (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+  };
+  const minDateTime = getMinDateTime();
+
   return (
     <Sheet open={!!task} onOpenChange={(open) => !open && onClose()}>
       <SheetContent 
@@ -233,6 +251,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               className="text-base font-medium h-12 bg-white"
               value={dueDate}
               onChange={handleDueDateChange}
+              min={new Date().toISOString().split('T')[0]}
             />
           </div>
 
@@ -244,6 +263,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
                 className="text-base font-medium h-12 bg-white"
                 value={startTime}
                 onChange={(e) => handleTimeChange("start", e.target.value)}
+                min={minDateTime}
               />
             </div>
             <div className="space-y-2">
@@ -253,6 +273,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
                 className="text-base font-medium h-12 bg-white"
                 value={endTime}
                 onChange={(e) => handleTimeChange("end", e.target.value)}
+                min={startTime || minDateTime}
               />
             </div>
           </div>
