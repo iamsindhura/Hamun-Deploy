@@ -94,6 +94,34 @@ export async function getTasks(projectId: string) {
   }
 }
 
+export async function checkTimeConflict(startTime: Date, endTime: Date, excludeTaskId?: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const conflict = await prisma.task.findFirst({
+      where: {
+        userId: session.user.id,
+        isCompleted: false,
+        startTime: { lt: endTime },
+        endTime: { gt: startTime },
+        ...(excludeTaskId ? { id: { not: excludeTaskId } } : {})
+      }
+    });
+
+    if (conflict) {
+      const formatTime = (d: Date | null) => d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      return { 
+        success: false, 
+        error: `⚠ Scheduling Conflict\nThis time slot overlaps with:\n${conflict.title}\n${formatTime(conflict.startTime)} - ${formatTime(conflict.endTime)}` 
+      };
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: "Failed to check conflicts" };
+  }
+}
+
 export async function createTask(data: { title: string; description?: string; columnId?: string; projectId: string; dueDate?: Date; priority?: TaskPriority; isPinned?: boolean; position: number; contactId?: string; startTime?: Date; endTime?: Date; taskType?: TaskType }) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
@@ -113,15 +141,9 @@ export async function createTask(data: { title: string; description?: string; co
       if (new Date(data.endTime) <= new Date(data.startTime)) {
         return { success: false, error: "End time must be after start time." };
       }
-      const conflict = await prisma.task.findFirst({
-        where: {
-          userId: session.user.id,
-          startTime: { lt: data.endTime },
-          endTime: { gt: data.startTime }
-        }
-      });
-      if (conflict) {
-        return { success: false, error: "Scheduling Conflict" };
+      const conflictResult = await checkTimeConflict(new Date(data.startTime), new Date(data.endTime));
+      if (!conflictResult.success) {
+        return { success: false, error: conflictResult.error };
       }
     }
 
@@ -164,16 +186,9 @@ export async function updateTask(id: string, projectId: string, data: Partial<an
         if (new Date(finalEndTime) <= new Date(finalStartTime)) {
           return { success: false, error: "End time must be after start time." };
         }
-        const conflict = await prisma.task.findFirst({
-          where: {
-            userId: session.user.id,
-            id: { not: id },
-            startTime: { lt: finalEndTime },
-            endTime: { gt: finalStartTime }
-          }
-        });
-        if (conflict) {
-          return { success: false, error: "Scheduling Conflict" };
+        const conflictResult = await checkTimeConflict(new Date(finalStartTime), new Date(finalEndTime), id);
+        if (!conflictResult.success) {
+          return { success: false, error: conflictResult.error };
         }
       }
     }

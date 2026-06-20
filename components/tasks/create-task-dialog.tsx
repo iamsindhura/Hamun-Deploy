@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TaskPriority, TaskType } from "@prisma/client";
 import { Flag, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { checkTimeConflict } from "@/app/actions/tasks";
 
 interface CreateTaskDialogProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
   const [priority, setPriority] = useState<TaskPriority>("NONE");
   const [taskType, setTaskType] = useState<TaskType>("GENERAL");
   const [error, setError] = useState("");
+  const [conflictError, setConflictError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getMinDateTime = () => {
@@ -37,6 +39,26 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
     return (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
   };
   const minDateTime = getMinDateTime();
+
+  useEffect(() => {
+    if (startTime && endTime) {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      if (start > new Date() && end > start) {
+        checkTimeConflict(start, end).then(res => {
+          if (!res.success && res.error) {
+            setConflictError(res.error);
+          } else {
+            setConflictError("");
+          }
+        });
+      } else {
+        setConflictError("");
+      }
+    } else {
+      setConflictError("");
+    }
+  }, [startTime, endTime]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,12 +207,13 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
           </div>
 
           {error && <div className="text-sm text-red-500 font-medium">{error}</div>}
+          {conflictError && <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-200 font-medium whitespace-pre-wrap">{conflictError}</div>}
 
           <div className="pt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !!conflictError}>
               {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Create Task
             </Button>

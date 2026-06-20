@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Task, TaskPriority, TaskType } from "@prisma/client";
-import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask } from "@/app/actions/tasks";
+import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, checkTimeConflict } from "@/app/actions/tasks";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -58,8 +58,31 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       setStartTime(task.startTime ? formatLocalTime(task.startTime) : "");
       setEndTime(task.endTime ? formatLocalTime(task.endTime) : "");
       setError("");
+      setConflictError("");
     }
   }, [task]);
+
+  const [conflictError, setConflictError] = useState("");
+
+  useEffect(() => {
+    if (startTime && endTime && task?.id) {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      if (start > new Date() && end > start) {
+        checkTimeConflict(start, end, task.id).then(res => {
+          if (!res.success && res.error) {
+            setConflictError(res.error);
+          } else {
+            setConflictError("");
+          }
+        });
+      } else {
+        setConflictError("");
+      }
+    } else {
+      setConflictError("");
+    }
+  }, [startTime, endTime, task?.id]);
 
   if (!task) return null;
 
@@ -87,6 +110,15 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
     if (finalStartTime && finalEndTime && finalEndTime <= finalStartTime) {
       setError("End time must be after start time.");
       return;
+    }
+
+    if (finalStartTime && finalEndTime && (updates.startTime !== undefined || updates.endTime !== undefined)) {
+      const conflictRes = await checkTimeConflict(finalStartTime, finalEndTime, task.id);
+      if (!conflictRes.success) {
+        setConflictError(conflictRes.error || "Scheduling Conflict");
+        return;
+      }
+      setConflictError("");
     }
 
     const updated = { 
@@ -366,13 +398,14 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
             </form>
           </div>
           {error && <div className="text-sm text-red-500 font-medium p-2 bg-red-50 rounded-md">{error}</div>}
+          {conflictError && <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-200 font-medium whitespace-pre-wrap">{conflictError}</div>}
         </div>
 
         <div className="p-4 border-t bg-white flex items-center justify-between mt-auto">
           <Button variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" /> Delete Task
           </Button>
-          <Button onClick={onClose}>Save</Button>
+          <Button onClick={onClose} disabled={!!conflictError}>Save</Button>
         </div>
       </SheetContent>
     </Sheet>
