@@ -14,6 +14,8 @@ model User {
   avatar        String?
   image         String?
   emailVerified DateTime?
+  workdayStart  String             @default("09:00")
+  workdayEnd    String             @default("18:00")
   createdAt     DateTime           @default(now())
   accounts      Account[]
   contacts      Contact[]
@@ -146,6 +148,7 @@ model Task {
   title       String
   description String?
   isCompleted Boolean      @default(false)
+  completedAt DateTime?
   dueDate     DateTime?
   reminderAt  DateTime?
   priority    TaskPriority @default(NONE)

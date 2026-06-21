@@ -63,6 +63,11 @@ const crmRoutes = [
   },
 ];
 
+import {
+  CheckCircle,
+  AlertCircle
+} from "lucide-react";
+
 const smartLists = [
   {
     label: "Today",
@@ -75,6 +80,18 @@ const smartLists = [
     icon: Calendar,
     href: "/tasks/upcoming",
     active: (pathname: string) => pathname === "/tasks/upcoming",
+  },
+  {
+    label: "Completed",
+    icon: CheckCircle,
+    href: "/tasks/completed",
+    active: (pathname: string) => pathname === "/tasks/completed",
+  },
+  {
+    label: "Overdue",
+    icon: AlertCircle,
+    href: "/tasks/overdue",
+    active: (pathname: string) => pathname === "/tasks/overdue",
   },
 ];
 

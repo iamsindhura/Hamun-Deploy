@@ -18,18 +18,27 @@ export default async function UpcomingTasksPage() {
   const tasks = await prisma.task.findMany({
     where: {
       userId: session.user.id,
+      isCompleted: false,
       OR: [
+        { endTime: { gte: new Date() } },
+        { endTime: null }
+      ],
+      AND: [
         {
-          startTime: {
-            gte: today,
-            lt: nextWeek,
-          }
-        },
-        {
-          dueDate: {
-            gte: today,
-            lt: nextWeek,
-          }
+          OR: [
+            {
+              startTime: {
+                gte: today,
+                lt: nextWeek,
+              }
+            },
+            {
+              dueDate: {
+                gte: today,
+                lt: nextWeek,
+              }
+            }
+          ]
         }
       ]
     },

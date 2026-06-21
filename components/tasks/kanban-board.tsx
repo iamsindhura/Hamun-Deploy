@@ -59,9 +59,14 @@ const formatCompletedDueDate = (dateInput: Date | string) => {
 };
 
 function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
+  const isOverdue = !task.isCompleted && task.endTime && new Date(task.endTime) < new Date();
+  const isCompleted = task.isCompleted;
+  const isDraggable = !isCompleted && !isOverdue;
+
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: "Task", task },
+    disabled: !isDraggable,
   });
 
   const style = {
@@ -75,24 +80,40 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
     );
   }
 
+  let cardStyles = "border-slate-200 bg-white hover:-translate-y-0.5 hover:shadow-md";
+  if (isCompleted) {
+    cardStyles = "bg-[#ECFDF5] border-[#22C55E]";
+  } else if (isOverdue) {
+    cardStyles = "bg-[#FEF2F2] border-[#EF4444] hover:-translate-y-0.5 hover:shadow-md";
+  }
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+      className={cn("group relative flex flex-col gap-3 rounded-xl border p-4 shadow-sm transition-all cursor-pointer", cardStyles)}
       onClick={onClick}
     >
       <div className="flex items-start gap-2">
-        <div {...attributes} {...listeners} className="mt-0.5 cursor-grab text-slate-300 hover:text-slate-500 transition-colors">
-          <GripVertical className="h-4 w-4" />
-        </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}
-          className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
-        >
-          {task.isCompleted ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <Circle className="h-5 w-5" />}
-        </button>
-        <span className={cn("flex-1 font-semibold text-[15px] leading-snug text-slate-800 break-all", task.isCompleted && "text-slate-400 line-through")}>
+        {isDraggable && (
+          <div {...attributes} {...listeners} className="mt-0.5 cursor-grab text-slate-300 hover:text-slate-500 transition-colors">
+            <GripVertical className="h-4 w-4" />
+          </div>
+        )}
+        
+        {isCompleted ? (
+          <div className="mt-0.5 shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}>
+            <CheckCircle2 className="h-5 w-5 text-[#22C55E]" />
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}
+            className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
+          >
+            <Circle className="h-5 w-5" />
+          </button>
+        )}
+        <span className={cn("flex-1 font-semibold text-[15px] leading-snug break-all", isCompleted ? "text-emerald-900" : isOverdue ? "text-red-900" : "text-slate-800")}>
           {task.title}
         </span>
       </div>
@@ -188,9 +209,8 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
     transform: CSS.Transform.toString(transform),
   };
 
-  const activeTasks = useMemo(() => tasks.filter((t: Task) => !t.isCompleted), [tasks]);
-  const completedTasks = useMemo(() => tasks.filter((t: Task) => t.isCompleted), [tasks]);
-  const activeTaskIds = useMemo(() => activeTasks.map((t: Task) => t.id), [activeTasks]);
+  const taskIds = useMemo(() => tasks.map((t: Task) => t.id), [tasks]);
+  const activeTasksCount = tasks.filter((t: Task) => !t.isCompleted).length;
 
   const colors = COLUMN_COLORS[(index ?? 0) % COLUMN_COLORS.length] || COLUMN_COLORS[0];
 
@@ -207,7 +227,7 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
         </div>
         <div className="flex items-center gap-1">
           <Badge variant="outline" className={cn("bg-white shadow-sm font-semibold mr-1", colors.text)}>
-            {activeTasks.length}
+            {activeTasksCount}
           </Badge>
           <DropdownMenu>
             <DropdownMenuTrigger className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -226,8 +246,8 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
       </div>
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden no-scrollbar pb-2">
-        <SortableContext items={activeTaskIds} strategy={verticalListSortingStrategy}>
-          {activeTasks.map((task: Task) => (
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          {tasks.map((task: Task) => (
             <SortableTask
               key={task.id}
               task={task}
@@ -236,38 +256,6 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
             />
           ))}
         </SortableContext>
-
-        {completedTasks.length > 0 && (
-          <div className="mt-4 border-t border-slate-200/60 pt-3">
-            <button
-              onClick={() => setIsCompletedExpanded(!isCompletedExpanded)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors w-full text-left select-none"
-            >
-              {isCompletedExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-              )}
-              <span className="font-semibold text-slate-600">Completed</span>
-              <span className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-500 font-medium">
-                {completedTasks.length}
-              </span>
-            </button>
-
-            {isCompletedExpanded && (
-              <div className="mt-2.5 flex flex-col gap-2 max-h-60 overflow-y-auto no-scrollbar pt-1">
-                {completedTasks.map((task: Task) => (
-                  <CompletedTaskCard
-                    key={task.id}
-                    task={task}
-                    onClick={() => onTaskClick(task)}
-                    onToggle={onToggleTask}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="mt-2">
@@ -340,6 +328,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       title: data.title,
       description: null,
       isCompleted: false,
+      completedAt: null,
       dueDate: null,
       reminderAt: null,
       priority: data.priority,
@@ -523,6 +512,10 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
 
   const columnIds = useMemo(() => columns.map(c => c.id), [columns]);
 
+  const completedCount = tasks.filter(t => t.isCompleted).length;
+  const overdueCount = tasks.filter(t => !t.isCompleted && t.endTime && new Date(t.endTime) < new Date()).length;
+  const activeCount = tasks.filter(t => !t.isCompleted && !(t.endTime && new Date(t.endTime) < new Date())).length;
+
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Header with Project Name and Focus Mode button */}
@@ -531,6 +524,20 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
           <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
             {projectName}
           </h1>
+          <div className="flex items-center gap-2 ml-4 border-l pl-4 border-slate-200">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-md border border-slate-200 shadow-sm">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active</span>
+              <span className="text-sm font-bold text-slate-700">{activeCount}</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-md border border-emerald-200 shadow-sm">
+              <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Completed</span>
+              <span className="text-sm font-bold text-emerald-700">{completedCount}</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 rounded-md border border-red-200 shadow-sm">
+              <span className="text-[10px] font-bold text-red-600/80 uppercase tracking-wider">Overdue</span>
+              <span className="text-sm font-bold text-red-700">{overdueCount}</span>
+            </div>
+          </div>
           {columns.length > 0 && (
             <div className="flex items-center gap-3">
               <div className="relative w-64 md:w-80">
