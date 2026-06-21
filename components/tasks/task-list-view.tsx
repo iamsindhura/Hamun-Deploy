@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, deleteTask, recoverOverdueTask } from "@/app/actions/tasks";
 import { toast } from "sonner";
-import { ArrowRight, Clock, X } from "lucide-react";
+import { ArrowRight, Clock, X, Play } from "lucide-react";
 import { createActivity } from "@/app/actions/activities";
 import { FollowUpDialog } from "@/components/tasks/follow-up-dialog";
+import Link from "next/link";
 
 interface TaskListViewProps {
   tasks: any[];
@@ -156,9 +157,9 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
                     </div>
                   )}
 
-                  {/* 4. Metadata Row */}
-                  {(task.taskType && task.taskType !== "GENERAL" || task.priority !== "NONE") && (
-                    <div className="flex items-center gap-2 mt-1">
+                  {/* 4. Metadata Row & Actions */}
+                  <div className="flex items-center justify-between w-full mt-1">
+                    <div className="flex items-center gap-2">
                       {task.taskType && task.taskType !== "GENERAL" && (
                         <span className="bg-white/60 px-2 py-0.5 rounded border text-xs font-bold text-slate-600 tracking-wide uppercase">
                           [{task.taskType}]
@@ -171,7 +172,16 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
                         </span>
                       )}
                     </div>
-                  )}
+                    {task.taskType === "DEEP_WORK" && !isCompleted && !isOverdue && task.startTime && task.endTime && (
+                      <Link 
+                        href={`/focus/${task.id}`} 
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-md transition-colors shadow-sm ml-auto"
+                      >
+                        <Play className="h-3 w-3 fill-current" /> Start Focus Session
+                      </Link>
+                    )}
+                  </div>
 
                   {/* Recovery Options Bar */}
                   {showRecoveryOptions && (

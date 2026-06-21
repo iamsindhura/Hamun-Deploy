@@ -65,7 +65,8 @@ const crmRoutes = [
 
 import {
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Brain
 } from "lucide-react";
 
 const smartLists = [
@@ -92,6 +93,12 @@ const smartLists = [
     icon: AlertCircle,
     href: "/tasks/overdue",
     active: (pathname: string) => pathname === "/tasks/overdue",
+  },
+  {
+    label: "Deep Work",
+    icon: Brain,
+    href: "/deep-work",
+    active: (pathname: string) => pathname === "/deep-work",
   },
 ];
 
