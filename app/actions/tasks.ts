@@ -162,22 +162,7 @@ export async function createTask(data: { title: string; description?: string; co
         return { success: false, error: "End time must be after start time." };
       }
 
-      // Workday Boundary Check
-      const dbUser = await prisma.user.findUnique({ where: { id: session.user.id }, select: { workdayStart: true, workdayEnd: true } });
-      const [wsH, wsM] = (dbUser?.workdayStart || "09:00").split(':').map(Number);
-      const [weH, weM] = (dbUser?.workdayEnd || "18:00").split(':').map(Number);
 
-      const stDate = new Date(data.startTime);
-      const etDate = new Date(data.endTime);
-      
-      const stMinutes = stDate.getHours() * 60 + stDate.getMinutes();
-      const etMinutes = etDate.getHours() * 60 + etDate.getMinutes();
-      const wsMinutes = wsH * 60 + wsM;
-      const weMinutes = weH * 60 + weM;
-
-      if (stMinutes < wsMinutes || etMinutes > weMinutes || stDate.getDate() !== etDate.getDate()) {
-        return { success: false, error: "Task must be scheduled within your workday hours." };
-      }
 
       const conflictResult = await checkTimeConflict(new Date(data.startTime), new Date(data.endTime));
       if (!conflictResult.success) {
@@ -225,22 +210,7 @@ export async function updateTask(id: string, projectId: string, data: Partial<an
           return { success: false, error: "End time must be after start time." };
         }
 
-        // Workday Boundary Check
-        const dbUser = await prisma.user.findUnique({ where: { id: session.user.id }, select: { workdayStart: true, workdayEnd: true } });
-        const [wsH, wsM] = (dbUser?.workdayStart || "09:00").split(':').map(Number);
-        const [weH, weM] = (dbUser?.workdayEnd || "18:00").split(':').map(Number);
 
-        const stDate = new Date(finalStartTime);
-        const etDate = new Date(finalEndTime);
-        
-        const stMinutes = stDate.getHours() * 60 + stDate.getMinutes();
-        const etMinutes = etDate.getHours() * 60 + etDate.getMinutes();
-        const wsMinutes = wsH * 60 + wsM;
-        const weMinutes = weH * 60 + weM;
-
-        if (stMinutes < wsMinutes || etMinutes > weMinutes || stDate.getDate() !== etDate.getDate()) {
-          return { success: false, error: "Task must be scheduled within your workday hours." };
-        }
 
         const conflictResult = await checkTimeConflict(new Date(finalStartTime), new Date(finalEndTime), id);
         if (!conflictResult.success) {
@@ -339,11 +309,9 @@ export async function recoverOverdueTask(taskId: string, actionType: 'MOVE_TOMOR
     const task = await prisma.task.findUnique({ where: { id: taskId, userId: session.user.id } });
     if (!task || !task.startTime || !task.endTime) return { success: false, error: "Task not found or missing time constraints" };
 
-    const dbUser = await prisma.user.findUnique({ where: { id: session.user.id }, select: { workdayStart: true, workdayEnd: true } });
-    const workdayStart = dbUser?.workdayStart || "09:00";
-    const workdayEnd = dbUser?.workdayEnd || "18:00";
-    const [wsH, wsM] = workdayStart.split(':').map(Number);
-    const [weH, weM] = workdayEnd.split(':').map(Number);
+    // Use full 24-hour day
+    const wsH = 0; const wsM = 0;
+    const weH = 23; const weM = 59;
 
     const durationMs = task.endTime.getTime() - task.startTime.getTime();
 
@@ -354,7 +322,7 @@ export async function recoverOverdueTask(taskId: string, actionType: 'MOVE_TOMOR
       const tomorrowStart = new Date(tomorrow);
       tomorrowStart.setHours(wsH, wsM, 0, 0);
       const tomorrowEnd = new Date(tomorrow);
-      tomorrowEnd.setHours(weH, weM, 0, 0);
+      tomorrowEnd.setHours(weH, weM, 59, 999);
 
       let targetStart = new Date(tomorrow);
       targetStart.setHours(task.startTime.getHours(), task.startTime.getMinutes(), 0, 0);
@@ -434,7 +402,7 @@ export async function recoverOverdueTask(taskId: string, actionType: 'MOVE_TOMOR
         dayStart.setHours(wsH, wsM, 0, 0);
         
         const dayEnd = new Date(testDate);
-        dayEnd.setHours(weH, weM, 0, 0);
+        dayEnd.setHours(weH, weM, 59, 999);
         
         // If searching today, start from now if it's past workday start
         let searchStart = dayStart;

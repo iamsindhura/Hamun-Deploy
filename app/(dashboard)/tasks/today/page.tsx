@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { TaskListView } from "@/components/tasks/task-list-view";
-import { WorkdaySettingsCard } from "@/components/tasks/workday-settings-card";
+import { Calendar } from "lucide-react";
 
 export default async function TodayTasksPage() {
   const session = await auth();
@@ -16,14 +16,61 @@ export default async function TodayTasksPage() {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { workdayStart: true, workdayEnd: true }
+  // METRIC 1: COMPLETED TODAY
+  const completedTodayCount = await prisma.task.count({
+    where: {
+      userId: session.user.id,
+      isCompleted: true,
+      completedAt: {
+        gte: today,
+        lt: tomorrow
+      }
+    }
   });
 
-  const workdayStart = dbUser?.workdayStart || "09:00";
-  const workdayEnd = dbUser?.workdayEnd || "18:00";
+  // METRIC 2: SCHEDULED TODAY
+  const scheduledTodayCount = await prisma.task.count({
+    where: {
+      userId: session.user.id,
+      startTime: {
+        gte: today,
+        lt: tomorrow
+      }
+    }
+  });
 
+  // METRIC 3: PLANNED HOURS
+  const tasksScheduledToday = await prisma.task.findMany({
+    where: {
+      userId: session.user.id,
+      startTime: { gte: today, lt: tomorrow },
+      endTime: { not: null }
+    },
+    select: { startTime: true, endTime: true }
+  });
+  
+  let plannedMinutes = 0;
+  for (const t of tasksScheduledToday) {
+    if (t.startTime && t.endTime) {
+      plannedMinutes += Math.max(0, (t.endTime.getTime() - t.startTime.getTime()) / (1000 * 60));
+    }
+  }
+  const hours = Math.floor(plannedMinutes / 60);
+  const mins = Math.floor(plannedMinutes % 60);
+  const plannedHoursDisplay = hours > 0 && mins > 0 ? `${hours}h ${mins}m` : hours > 0 ? `${hours}h` : `${mins}m`;
+
+  // METRIC 4: TOTAL OVERDUES
+  const overdueCount = await prisma.task.count({
+    where: {
+      userId: session.user.id,
+      isCompleted: false,
+      endTime: {
+        lt: new Date()
+      }
+    }
+  });
+
+  // FETCH TASKS FOR LIST VIEW
   const tasks = await prisma.task.findMany({
     where: {
       userId: session.user.id,
@@ -57,87 +104,50 @@ export default async function TodayTasksPage() {
     orderBy: { startTime: "asc" },
   });
 
-  const overdueCount = await prisma.task.count({
-    where: {
-      userId: session.user.id,
-      isCompleted: false,
-      endTime: { lt: new Date() }
-    }
-  });
-
-  const scheduledCount = tasks.length;
-  
-  const plannedMs = tasks.reduce((acc, task) => {
-    if (task.startTime && task.endTime) {
-      return acc + (new Date(task.endTime).getTime() - new Date(task.startTime).getTime());
-    }
-    return acc;
-  }, 0);
-  
-  const plannedMinutes = Math.round(plannedMs / (1000 * 60));
-  
-  const parseTime = (timeStr: string) => {
-    const [h, m] = timeStr.split(":").map(Number);
-    return h * 60 + m;
-  };
-  
-  const totalWorkdayMinutes = parseTime(workdayEnd) - parseTime(workdayStart);
-  const availableCapacityMinutes = Math.max(0, totalWorkdayMinutes - plannedMinutes);
-
-  const formatDuration = (totalMinutes: number) => {
-    if (totalMinutes === 0) return "0h";
-    const h = Math.floor(totalMinutes / 60);
-    const m = Math.round(totalMinutes % 60);
-    
-    if (h > 0 && m > 0) return `${h}h ${m}m`;
-    if (h > 0) return `${h}h`;
-    return `${m}m`;
-  };
-
-  const plannedFormatted = formatDuration(plannedMinutes);
-  const availableCapacityFormatted = formatDuration(availableCapacityMinutes);
-
   return (
     <div className="flex h-full flex-col bg-slate-50/50">
       <div className="flex h-14 items-center border-b bg-white px-6">
         <h1 className="text-lg font-semibold">Today</h1>
       </div>
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-5xl mx-auto w-full">
-        {/* Dashboard Metrics */}
-        <div className="grid grid-cols-5 gap-4 w-full">
-          {/* Scheduled Today - Blue */}
-          <div className="bg-blue-50 rounded-2xl border border-blue-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-blue-600/80 uppercase tracking-wider mb-2">Scheduled Today</div>
-            <div className="text-4xl font-bold text-blue-900">{scheduledCount}</div>
-          </div>
-          
-          {/* Planned Hours - Green */}
-          <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-emerald-600/80 uppercase tracking-wider mb-2">Planned Hours</div>
-            <div className="text-4xl font-bold text-emerald-900">{plannedFormatted}</div>
-          </div>
-          
-          {/* Available Capacity - Amber */}
-          <div 
-            className="bg-amber-50 rounded-2xl border border-amber-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px] group relative"
-            title="Unscheduled workday time"
-          >
-            <div className="text-xs font-semibold text-amber-600/80 uppercase tracking-wider mb-2">Available Capacity</div>
-            <div className="text-4xl font-bold text-amber-900">{availableCapacityFormatted}</div>
-            <div className="text-[10px] font-medium text-amber-600/60 mt-1 leading-tight">Unscheduled workday time</div>
-          </div>
-          
-          {/* Overdue - Red */}
-          <div className="bg-red-50 rounded-2xl border border-red-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-red-600/80 uppercase tracking-wider mb-2">Overdue</div>
-            <div className="text-4xl font-bold text-red-900">{overdueCount}</div>
+      <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full">
+        {/* DASHBOARD METRICS */}
+        <div className="mb-8 grid gap-4 grid-cols-2 md:grid-cols-4">
+          {/* CARD 1: COMPLETED TODAY */}
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-purple-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Completed Today</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{completedTodayCount}</span>
           </div>
 
-          {/* Workday Settings - Indigo */}
-          <WorkdaySettingsCard initialStart={workdayStart} initialEnd={workdayEnd} />
+          {/* CARD 2: SCHEDULED TODAY */}
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-blue-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Scheduled Today</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{scheduledTodayCount}</span>
+          </div>
+
+          {/* CARD 3: PLANNED HOURS */}
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-emerald-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Planned Hours</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{plannedHoursDisplay || "0m"}</span>
+          </div>
+
+          {/* CARD 4: TOTAL OVERDUES */}
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-red-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Overdues</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{overdueCount}</span>
+          </div>
         </div>
 
-        <TaskListView tasks={tasks} />
+        {tasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full py-16 text-center">
+            <div className="rounded-full bg-white border border-slate-200 p-6 mb-4 shadow-sm">
+              <Calendar className="h-10 w-10 text-slate-300" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-700 mb-2">No tasks scheduled for today</h3>
+            <p className="text-slate-500 max-w-md">Take a break or schedule new tasks from your projects.</p>
+          </div>
+        ) : (
+          <TaskListView tasks={tasks} />
+        )}
       </div>
     </div>
   );

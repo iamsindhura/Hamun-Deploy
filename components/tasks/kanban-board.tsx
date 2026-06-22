@@ -7,6 +7,7 @@ import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
 import { createActivity } from "@/app/actions/activities";
 import { FollowUpDialog } from "@/components/tasks/follow-up-dialog";
+import { useTaskReminders } from "@/components/providers/task-reminder-provider";
 import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X, ListTodo, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -262,6 +263,12 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
 
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [activeFollowUpTask, setActiveFollowUpTask] = useState<any | null>(null);
+
+  const { setGlobalTasks } = useTaskReminders();
+
+  useEffect(() => {
+    setGlobalTasks(tasks);
+  }, [tasks, setGlobalTasks]);
 
   const filteredTasks = useMemo(() => {
     if (!searchQuery.trim()) return tasks;

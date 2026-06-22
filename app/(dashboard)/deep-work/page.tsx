@@ -200,29 +200,29 @@ export default async function DeepWorkPage() {
       </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-8 max-w-5xl mx-auto w-full">
         {/* Top Analytics Cards */}
-        <div className="grid grid-cols-4 gap-4 w-full">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4 w-full">
           {/* Planned */}
-          <div className="bg-blue-50 rounded-2xl border border-blue-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-blue-600/80 uppercase tracking-wider mb-2">Planned Today</div>
-            <div className="text-4xl font-bold text-blue-900">{formatDuration(plannedTodayMs)}</div>
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-blue-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Planned Today</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{formatDuration(plannedTodayMs)}</span>
           </div>
           
           {/* Completed */}
-          <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-emerald-600/80 uppercase tracking-wider mb-2">Completed Today</div>
-            <div className="text-4xl font-bold text-emerald-900">{formatDuration(completedTodayMs)}</div>
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-emerald-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Completed Today</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{formatDuration(completedTodayMs)}</span>
           </div>
           
           {/* Remaining */}
-          <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-amber-600/80 uppercase tracking-wider mb-2">Remaining</div>
-            <div className="text-4xl font-bold text-amber-900">{formatDuration(remainingMs)}</div>
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-amber-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Remaining</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{formatDuration(remainingMs)}</span>
           </div>
           
           {/* Streak */}
-          <div className="bg-purple-50 rounded-2xl border border-purple-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-purple-600/80 uppercase tracking-wider mb-2">Deep Work Streak</div>
-            <div className="text-4xl font-bold text-purple-900">{currentStreak} <span className="text-xl font-medium text-purple-600/60">Days</span></div>
+          <div className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-purple-500 flex flex-col justify-between gap-2 min-h-[90px]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Deep Work Streak</span>
+            <span className="text-3xl font-black text-slate-800 leading-none">{currentStreak} <span className="text-[18px] font-bold text-slate-400">Days</span></span>
           </div>
         </div>
 

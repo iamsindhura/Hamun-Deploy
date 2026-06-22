@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle2, Circle, Calendar, Flag, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, deleteTask, recoverOverdueTask } from "@/app/actions/tasks";
 import { toast } from "sonner";
-import { ArrowRight, Clock, X, Play } from "lucide-react";
+import { ArrowRight, Clock, X, Play, ArrowDown } from "lucide-react";
 import { createActivity } from "@/app/actions/activities";
 import { FollowUpDialog } from "@/components/tasks/follow-up-dialog";
+import { useTaskReminders } from "@/components/providers/task-reminder-provider";
 import Link from "next/link";
 
 interface TaskListViewProps {
@@ -25,6 +26,12 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
 
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [activeFollowUpTask, setActiveFollowUpTask] = useState<any | null>(null);
+
+  const { setGlobalTasks } = useTaskReminders();
+
+  useEffect(() => {
+    setGlobalTasks(tasks);
+  }, [tasks, setGlobalTasks]);
 
   const handleToggleCompletion = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -96,143 +103,147 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
             <div 
               key={task.id} 
               onClick={() => setSelectedTask(task)}
-              className={cn("flex flex-col rounded-xl border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] cursor-pointer transition-all duration-300 ease-in-out hover:-translate-y-1 gap-3 min-h-[120px] justify-center", cardStyles)}
+              className="flex flex-row rounded-2xl border border-slate-200/80 bg-white overflow-hidden shadow-sm cursor-pointer transition-all duration-300 ease-in-out hover:-translate-y-[1px] hover:shadow-md hover:border-slate-300 group"
             >
-              <div className="flex items-start gap-3">
-                {isCompleted ? (
-                  <div className="mt-0.5 shrink-0 cursor-pointer" onClick={(e) => handleToggleCompletion(task.id, e as any)}>
-                    <CheckCircle2 className="h-5 w-5 text-[#22C55E]" />
+              {/* LEFT PANEL */}
+              <div className="w-[110px] sm:w-[130px] shrink-0 bg-[#FFF6CC] text-[#B8860B] p-3 sm:p-4 flex flex-col justify-center items-center border-r border-[#FDE68A]/60">
+                <div className="flex flex-col items-center justify-center gap-1.5 text-sm font-bold tracking-tight">
+                  <span className="text-[14px] leading-none">{task.startTime ? new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "--:--"}</span>
+                  <div className="h-4 flex items-center justify-center opacity-50">
+                    <ArrowDown className="w-4 h-4" />
                   </div>
-                ) : (
-                  <button 
-                    onClick={(e) => handleToggleCompletion(task.id, e as any)}
-                    className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
-                  >
-                    <Circle className="h-5 w-5" />
-                  </button>
-                )}
-                
-                <div className="flex flex-col gap-2.5 flex-1 min-w-0">
-                  {/* 1. Task Title */}
-                  <div className={cn("font-bold text-[16px] leading-snug break-all", isCompleted ? "text-slate-500 line-through opacity-70" : "text-slate-800")}>
+                  <span className="text-[14px] leading-none">{task.endTime ? new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "--:--"}</span>
+                </div>
+              </div>
+
+              {/* RIGHT PANEL */}
+              <div className="flex-1 p-3 sm:p-4 flex flex-col min-w-0 bg-white justify-center">
+                <div className="flex items-start gap-3">
+                  {isCompleted ? (
+                    <div className="mt-[2px] shrink-0 cursor-pointer" onClick={(e) => handleToggleCompletion(task.id, e as any)}>
+                      <CheckCircle2 className="h-5 w-5 text-[#22C55E]" />
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={(e) => handleToggleCompletion(task.id, e as any)}
+                      className="mt-[2px] text-slate-400 hover:text-primary transition-colors shrink-0"
+                    >
+                      <Circle className="h-5 w-5" />
+                    </button>
+                  )}
+                  <div className={cn("font-bold text-[18px] leading-snug break-all", isCompleted ? "text-slate-500 line-through opacity-70" : "text-slate-800")}>
                     {task.title}
                   </div>
+                </div>
 
-                  {/* 2. Time Block */}
-                  {(task.startTime && task.endTime) ? (
-                    <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
-                      <Calendar className="h-4 w-4 opacity-70" />
-                      {new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </div>
-                  ) : showDate && !task.startTime && task.dueDate ? (
-                    <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
-                      <Calendar className="h-4 w-4 opacity-70" />
-                      {new Date(task.dueDate).toLocaleDateString()}
-                    </div>
-                  ) : null}
-
-                  {/* Optional Badges (Variant tracking) */}
-                  {variant === "completed" && task.completedAt && (
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100 self-start">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Completed: {new Date(task.completedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })} {new Date(task.completedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </div>
-                  )}
-                  {variant === "overdue" && task.endTime && (
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-100 self-start">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      Overdue by {Math.max(1, Math.floor((Date.now() - new Date(task.endTime).getTime()) / (1000 * 60 * 60 * 24)))} Days
-                    </div>
-                  )}
-
-                  {/* 3. Project Name */}
+                <div className="pl-8 flex flex-col gap-1.5 mt-1.5">
+                  {/* Row 2: Project */}
                   {task.project?.name && (
-                    <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
-                      📁 {task.project.name}
+                    <div className="flex items-center gap-1.5 text-[14.5px] font-medium text-slate-500">
+                      🏢 {task.project.name}
                     </div>
                   )}
 
-                  {/* 4. Metadata Row & Actions */}
-                  <div className="flex items-center justify-between w-full mt-1">
-                    <div className="flex items-center gap-2">
-                      {task.taskType && task.taskType !== "GENERAL" && (
-                        <span className="bg-white/60 px-2 py-0.5 rounded border text-xs font-bold text-slate-600 tracking-wide uppercase">
-                          [{task.taskType}]
-                        </span>
-                      )}
-                      {task.priority !== "NONE" && (
-                        <span className="bg-white/60 px-2 py-0.5 rounded border text-xs font-bold text-slate-600 tracking-wide uppercase flex items-center gap-1">
-                          <Flag className={cn("h-3 w-3", task.priority === "HIGH" ? "text-red-500" : task.priority === "MEDIUM" ? "text-yellow-500" : "text-blue-500")} />
-                          [{task.priority}]
-                        </span>
-                      )}
-                    </div>
+                  {/* Row 3: Priority Badge + Optional Variants */}
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="bg-[#F8FAFC] text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                       {task.taskType || "GENERAL"}
+                    </span>
+
+                    {task.priority !== "NONE" ? (
+                      <span className={cn(
+                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1",
+                        task.priority === "HIGH" ? "bg-[#FEE2E2] text-[#DC2626]" :
+                        task.priority === "MEDIUM" ? "bg-[#FEF3C7] text-[#D97706]" :
+                        "bg-[#DCFCE7] text-[#16A34A]"
+                      )}>
+                        {task.priority}
+                      </span>
+                    ) : (
+                      <span className="bg-[#F3F4F6] text-[#6B7280] px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                        NONE
+                      </span>
+                    )}
+
+                    {variant === "completed" && task.completedAt && (
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Done {new Date(task.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </div>
+                    )}
+                    {variant === "overdue" && task.endTime && (
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100">
+                        <AlertCircle className="h-3 w-3" />
+                        Late {Math.max(1, Math.floor((Date.now() - new Date(task.endTime).getTime()) / (1000 * 60 * 60 * 24)))}d
+                      </div>
+                    )}
+                    
                     {task.taskType === "DEEP_WORK" && !isCompleted && !isOverdue && task.startTime && task.endTime && (
                       <Link 
                         href={`/focus/${task.id}`} 
                         onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-md transition-colors shadow-sm ml-auto"
+                        className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-full transition-colors shadow-sm ml-auto"
                       >
-                        <Play className="h-3 w-3 fill-current" /> Start Focus Session
+                        <Play className="h-3 w-3 fill-current" /> Focus
                       </Link>
                     )}
                   </div>
-
-                  {/* Recovery Options Bar */}
-                  {showRecoveryOptions && (
-                    <div className="mt-2 pt-3 border-t border-red-200/60 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          setRecoveringTaskId(task.id);
-                          const result = await recoverOverdueTask(task.id, 'MOVE_TOMORROW');
-                          setRecoveringTaskId(null);
-                          if (result.success) {
-                            toast.success("Task moved to tomorrow successfully");
-                            setTasks(prev => prev.filter(t => t.id !== task.id));
-                          } else {
-                            toast.error(result.error);
-                          }
-                        }}
-                        disabled={recoveringTaskId === task.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-md transition-colors"
-                      >
-                        {recoveringTaskId === task.id ? "Moving..." : <><ArrowRight className="h-3.5 w-3.5" /> Move to Tomorrow</>}
-                      </button>
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          setRecoveringTaskId(task.id);
-                          const result = await recoverOverdueTask(task.id, 'MOVE_NEXT_FREE_SLOT');
-                          setRecoveringTaskId(null);
-                          if (result.success) {
-                            toast.success("Task moved to next free slot successfully");
-                            setTasks(prev => prev.filter(t => t.id !== task.id));
-                          } else {
-                            toast.error(result.error);
-                          }
-                        }}
-                        disabled={recoveringTaskId === task.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded-md transition-colors"
-                      >
-                        {recoveringTaskId === task.id ? "Moving..." : <><Clock className="h-3.5 w-3.5" /> Move to Next Free Slot</>}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIgnoredTaskIds(prev => {
-                            const next = new Set(prev);
-                            next.add(task.id);
-                            return next;
-                          });
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 text-xs font-bold rounded-md transition-colors ml-auto"
-                      >
-                        <X className="h-3.5 w-3.5" /> Ignore
-                      </button>
-                    </div>
-                  )}
                 </div>
+
+                {/* Recovery Options Bar */}
+                {showRecoveryOptions && (
+                  <div className="mt-3 pt-3 border-t border-red-100 flex flex-wrap items-center gap-2 pl-8" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setRecoveringTaskId(task.id);
+                        const result = await recoverOverdueTask(task.id, 'MOVE_TOMORROW');
+                        setRecoveringTaskId(null);
+                        if (result.success) {
+                          toast.success("Task moved to tomorrow successfully");
+                          setTasks(prev => prev.filter(t => t.id !== task.id));
+                        } else {
+                          toast.error(result.error);
+                        }
+                      }}
+                      disabled={recoveringTaskId === task.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-lg transition-colors"
+                    >
+                      {recoveringTaskId === task.id ? "Moving..." : <><ArrowRight className="h-3.5 w-3.5" /> Tomorrow</>}
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setRecoveringTaskId(task.id);
+                        const result = await recoverOverdueTask(task.id, 'MOVE_NEXT_FREE_SLOT');
+                        setRecoveringTaskId(null);
+                        if (result.success) {
+                          toast.success("Task moved to next free slot successfully");
+                          setTasks(prev => prev.filter(t => t.id !== task.id));
+                        } else {
+                          toast.error(result.error);
+                        }
+                      }}
+                      disabled={recoveringTaskId === task.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded-lg transition-colors"
+                    >
+                      {recoveringTaskId === task.id ? "Moving..." : <><Clock className="h-3.5 w-3.5" /> Next Free</>}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIgnoredTaskIds(prev => {
+                          const next = new Set(prev);
+                          next.add(task.id);
+                          return next;
+                        });
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 text-xs font-bold rounded-lg transition-colors ml-auto"
+                    >
+                      <X className="h-3.5 w-3.5" /> Ignore
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
