@@ -41,3 +41,29 @@ export async function updateWorkdaySettings(start: string, end: string) {
     return { success: false, error: "Failed to save settings" };
   }
 }
+
+export async function updateAudioSettings(data: {
+  audioCuesEnabled?: boolean;
+  audioCheckpointsEnabled?: boolean;
+  audioWarningEnabled?: boolean;
+  audioVolume?: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data,
+    });
+    
+    revalidatePath("/deep-work");
+    revalidatePath("/focus/[taskId]");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update audio settings", error);
+    return { success: false, error: "Failed to save audio settings" };
+  }
+}

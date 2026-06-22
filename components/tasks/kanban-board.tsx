@@ -37,14 +37,17 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const COLUMN_COLORS = [
-  { bg: "bg-indigo-50/80", border: "border-t-indigo-500", text: "text-indigo-800" },
-  { bg: "bg-purple-50/80", border: "border-t-purple-500", text: "text-purple-800" },
-  { bg: "bg-pink-50/80", border: "border-t-pink-500", text: "text-pink-800" },
-  { bg: "bg-amber-50/80", border: "border-t-amber-500", text: "text-amber-800" },
-  { bg: "bg-emerald-50/80", border: "border-t-emerald-500", text: "text-emerald-800" },
-  { bg: "bg-cyan-50/80", border: "border-t-cyan-500", text: "text-cyan-800" },
-];
+const SECTION_COLORS_MAP: Record<string, { hex: string, rgb: string }> = {
+  purple: { hex: "#7C3AED", rgb: "124, 58, 237" },
+  blue: { hex: "#2563EB", rgb: "37, 99, 235" },
+  emerald: { hex: "#10B981", rgb: "16, 185, 129" },
+  orange: { hex: "#F97316", rgb: "249, 115, 22" },
+  pink: { hex: "#EC4899", rgb: "236, 72, 153" },
+  indigo: { hex: "#4F46E5", rgb: "79, 70, 229" },
+  teal: { hex: "#14B8A6", rgb: "20, 184, 166" },
+  rose: { hex: "#F43F5E", rgb: "244, 63, 94" }
+};
+const SECTION_COLORS = ["purple", "blue", "emerald", "orange", "pink", "indigo", "teal", "rose"];
 
 const formatDueDate = (dateInput: Date | string) => {
   const date = new Date(dateInput);
@@ -59,9 +62,8 @@ const formatCompletedDueDate = (dateInput: Date | string) => {
 };
 
 function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
-  const isOverdue = !task.isCompleted && task.endTime && new Date(task.endTime) < new Date();
   const isCompleted = task.isCompleted;
-  const isDraggable = !isCompleted && !isOverdue;
+  const isDraggable = !isCompleted;
 
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -76,121 +78,51 @@ function SortableTask({ task, onClick, onToggle }: { task: any, onClick: () => v
 
   if (isDragging) {
     return (
-      <div ref={setNodeRef} style={style} className="h-20 rounded-lg border-2 border-primary/50 bg-primary/10 opacity-50" />
+      <div ref={setNodeRef} style={style} className="h-14 rounded-lg border-2 border-primary/50 bg-primary/10 opacity-50" />
     );
-  }
-
-  let cardStyles = "border-slate-200 bg-white hover:-translate-y-0.5 hover:shadow-md";
-  if (isCompleted) {
-    cardStyles = "bg-[#ECFDF5] border-[#22C55E]";
-  } else if (isOverdue) {
-    cardStyles = "bg-[#FEF2F2] border-[#EF4444] hover:-translate-y-0.5 hover:shadow-md";
   }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={cn("group relative flex flex-col gap-3 rounded-xl border p-4 shadow-sm transition-all cursor-pointer", cardStyles)}
+      className="group relative flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition-all duration-300 ease-in-out cursor-pointer hover:-translate-y-1 hover:shadow-[0_8px_24px_-4px_rgba(var(--section-rgb),0.15)] hover:border-[var(--section-color)]"
       onClick={onClick}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-3">
         {isDraggable && (
-          <div {...attributes} {...listeners} className="mt-0.5 cursor-grab text-slate-300 hover:text-slate-500 transition-colors">
+          <div {...attributes} {...listeners} className="mt-0.5 cursor-grab text-slate-300 hover:text-[var(--section-color)] transition-colors">
             <GripVertical className="h-4 w-4" />
           </div>
         )}
         
-        {isCompleted ? (
-          <div className="mt-0.5 shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}>
-            <CheckCircle2 className="h-5 w-5 text-[#22C55E]" />
-          </div>
-        ) : (
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}
-            className="mt-0.5 text-slate-400 hover:text-primary transition-colors shrink-0"
-          >
-            <Circle className="h-5 w-5" />
-          </button>
-        )}
-        <span className={cn("flex-1 font-semibold text-[15px] leading-snug break-all", isCompleted ? "text-emerald-900" : isOverdue ? "text-red-900" : "text-slate-800")}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}
+          className="mt-0.5 text-slate-400 hover:text-[var(--section-color)] transition-colors shrink-0"
+        >
+          <Circle className="h-5 w-5" />
+        </button>
+        <span className="flex-1 font-bold text-[16px] leading-snug break-all text-slate-800">
           {task.title}
         </span>
       </div>
-
-      {(task.dueDate || task.startTime || task.taskType !== "GENERAL" || task.priority !== "NONE" || (task.subtasks && task.subtasks.length > 0)) && (
-        <div className="mt-2 flex items-center gap-2 pl-8 flex-wrap">
-          {task.startTime && task.endTime && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 rounded-md border border-indigo-100 text-xs font-bold text-indigo-600">
-              <Calendar className="h-3 w-3" />
-              {new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-            </div>
-          )}
-          {!task.startTime && task.dueDate && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-medium text-slate-500">
-              <Calendar className="h-3 w-3" />
-              {formatDueDate(task.dueDate)}
-            </div>
-          )}
-          {task.taskType && task.taskType !== "GENERAL" && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-md border border-slate-200 text-xs font-bold text-slate-600">
-              [{task.taskType}]
-            </div>
-          )}
-          {task.priority !== "NONE" && (
-            <div className={cn("flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-bold",
-              task.priority === "HIGH" ? "bg-red-50 border-red-100 text-red-600" :
-                task.priority === "MEDIUM" ? "bg-amber-50 border-amber-100 text-amber-600" :
-                  "bg-blue-50 border-blue-100 text-blue-600"
-            )}>
-              <Flag className="h-3 w-3" /> [{task.priority}]
-            </div>
-          )}
-          {task.subtasks && task.subtasks.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100 text-xs font-semibold text-slate-500">
-              <ListTodo className="h-3 w-3 text-slate-400" />
-              <span>
-                {task.subtasks.filter((s: any) => s.isCompleted).length}/{task.subtasks.length}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-function CompletedTaskCard({ task, onClick, onToggle }: { task: any, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
+function CompletedTask({ task, onClick, onToggle }: { task: any, onClick: () => void, onToggle: (id: string, completed: boolean) => void }) {
   return (
     <div
-      className="group relative flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50/40 p-3 shadow-none transition-all hover:bg-slate-100/40 cursor-pointer opacity-70"
+      className="group relative flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition-all duration-300 ease-in-out cursor-pointer hover:-translate-y-1 hover:shadow-md opacity-70 hover:opacity-100 hover:border-[var(--section-color)]"
       onClick={onClick}
     >
-      <div className="flex items-start gap-2">
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}
-          className="mt-0.5 text-emerald-500 hover:text-emerald-600 transition-colors shrink-0"
-        >
-          <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-50 bg-white rounded-full" />
-        </button>
-        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-          <span className="font-semibold text-[14px] leading-snug text-slate-400 line-through truncate">
-            {task.title}
-          </span>
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {task.dueDate && (
-              <span className="text-[11px] text-slate-400 font-medium">
-                {formatCompletedDueDate(task.dueDate)}
-              </span>
-            )}
-            {task.subtasks && task.subtasks.length > 0 && (
-              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                <ListTodo className="h-3 w-3 text-slate-400" />
-                {task.subtasks.filter((s: any) => s.isCompleted).length}/{task.subtasks.length}
-              </span>
-            )}
-          </div>
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.isCompleted); }}>
+          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
         </div>
+        <span className="flex-1 font-bold text-[16px] leading-snug break-all text-slate-400 line-through">
+          {task.title}
+        </span>
       </div>
     </div>
   );
@@ -209,28 +141,39 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
     transform: CSS.Transform.toString(transform),
   };
 
-  const taskIds = useMemo(() => tasks.map((t: Task) => t.id), [tasks]);
-  const activeTasksCount = tasks.filter((t: Task) => !t.isCompleted).length;
+  const activeTasks = tasks.filter((t: Task) => !t.isCompleted);
+  const completedTasks = tasks.filter((t: Task) => t.isCompleted);
+  const activeTaskIds = useMemo(() => activeTasks.map((t: Task) => t.id), [activeTasks]);
+  const activeTasksCount = activeTasks.length;
 
-  const colors = COLUMN_COLORS[(index ?? 0) % COLUMN_COLORS.length] || COLUMN_COLORS[0];
+  const baseColorName = column.color || SECTION_COLORS[index % SECTION_COLORS.length];
+  const colorData = SECTION_COLORS_MAP[baseColorName] || SECTION_COLORS_MAP.purple;
+
+  const cssVars = {
+    '--section-color': colorData.hex,
+    '--section-rgb': colorData.rgb,
+    ...style,
+    borderTopColor: 'var(--section-color)',
+    backgroundColor: 'rgba(var(--section-rgb), 0.04)'
+  } as React.CSSProperties;
 
   if (isDragging) {
-    return <div ref={setNodeRef} style={style} className="flex w-80 flex-shrink-0 flex-col rounded-xl border-2 border-primary/50 bg-primary/10 opacity-50 p-3 h-full" />;
+    return <div ref={setNodeRef} style={cssVars} className="flex w-80 flex-shrink-0 flex-col rounded-xl border border-t-[4px] border-slate-200 opacity-50 p-4 h-full" />;
   }
 
   return (
-    <div ref={setNodeRef} style={style} className={cn("flex w-80 flex-shrink-0 flex-col rounded-xl border-t-[4px] p-4 h-full shadow-sm", colors.bg, colors.border)}>
-      <div className="mb-4 flex items-center justify-between">
-        <div className={cn("flex items-center gap-2 cursor-grab font-bold tracking-wide", colors.text)} {...attributes} {...listeners}>
-          <GripVertical className="h-4 w-4 opacity-50" />
-          <span>{column.name}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Badge variant="outline" className={cn("bg-white shadow-sm font-semibold mr-1", colors.text)}>
+    <div ref={setNodeRef} style={cssVars} className="group/col flex w-80 flex-shrink-0 flex-col rounded-xl border border-slate-200 border-t-[4px] p-4 h-full shadow-sm transition-all duration-300 ease-in-out hover:shadow-[0_8px_30px_-4px_rgba(var(--section-rgb),0.12)]">
+      <div className="mb-4 flex items-center justify-between rounded-lg p-2.5 bg-[rgba(var(--section-rgb),0.06)] border border-[rgba(var(--section-rgb),0.1)]">
+        <div className="flex items-center gap-2 cursor-grab font-bold tracking-wide text-[var(--section-color)]" {...attributes} {...listeners}>
+          <GripVertical className="h-4 w-4 opacity-50 hover:opacity-100 transition-opacity" />
+          <span className="text-[15px] uppercase tracking-wider">{column.name}</span>
+          <Badge className="ml-1 bg-[rgba(var(--section-rgb),0.15)] text-[var(--section-color)] hover:bg-[rgba(var(--section-rgb),0.25)] border-none px-2 py-0.5 rounded-full shadow-none font-bold">
             {activeTasksCount}
           </Badge>
+        </div>
+        <div className="flex items-center gap-1">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <DropdownMenuTrigger className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-[rgba(var(--section-rgb),0.1)] text-[var(--section-color)] outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -246,8 +189,8 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
       </div>
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden no-scrollbar pb-2">
-        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          {tasks.map((task: Task) => (
+        <SortableContext items={activeTaskIds} strategy={verticalListSortingStrategy}>
+          {activeTasks.map((task: Task) => (
             <SortableTask
               key={task.id}
               task={task}
@@ -256,10 +199,40 @@ function SortableColumn({ column, index, tasks, onAddTask, onToggleTask, onTaskC
             />
           ))}
         </SortableContext>
+
+        {completedTasks.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-slate-200/60">
+            <button 
+              onClick={() => setIsCompletedExpanded(!isCompletedExpanded)}
+              className="flex items-center justify-between w-full px-2 py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors rounded-md hover:bg-primary/5"
+            >
+              <span>Completed ({completedTasks.length})</span>
+              {isCompletedExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+            
+            {isCompletedExpanded && (
+              <div className="mt-2 flex flex-col gap-2">
+                {completedTasks.map((task: Task) => (
+                  <CompletedTask
+                    key={task.id}
+                    task={task}
+                    onClick={() => onTaskClick(task)}
+                    onToggle={onToggleTask}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-2">
-        <QuickAddTask columnId={column.id} projectId={column.projectId} onAdd={(data) => onAddTask(data, column.id)} />
+        <QuickAddTask 
+          columnId={column.id} 
+          projectId={column.projectId} 
+          onAdd={(data) => onAddTask(data, column.id)} 
+          className="w-full justify-start border border-dashed border-[var(--section-color)]/30 bg-[rgba(var(--section-rgb),0.05)] text-[var(--section-color)] hover:bg-[var(--section-color)] hover:text-white transition-all duration-300 ease-in-out shadow-sm font-semibold rounded-xl h-10"
+        />
       </div>
     </div>
   );
@@ -512,32 +485,17 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
 
   const columnIds = useMemo(() => columns.map(c => c.id), [columns]);
 
-  const completedCount = tasks.filter(t => t.isCompleted).length;
-  const overdueCount = tasks.filter(t => !t.isCompleted && t.endTime && new Date(t.endTime) < new Date()).length;
-  const activeCount = tasks.filter(t => !t.isCompleted && !(t.endTime && new Date(t.endTime) < new Date())).length;
+
 
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Header with Project Name and Focus Mode button */}
       <div className="flex h-16 items-center justify-between border-b px-8 bg-slate-50/50 shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+          <h1 className="text-2xl font-black tracking-tight text-primary">
             {projectName}
           </h1>
-          <div className="flex items-center gap-2 ml-4 border-l pl-4 border-slate-200">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-md border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active</span>
-              <span className="text-sm font-bold text-slate-700">{activeCount}</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-md border border-emerald-200 shadow-sm">
-              <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Completed</span>
-              <span className="text-sm font-bold text-emerald-700">{completedCount}</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 rounded-md border border-red-200 shadow-sm">
-              <span className="text-[10px] font-bold text-red-600/80 uppercase tracking-wider">Overdue</span>
-              <span className="text-sm font-bold text-red-700">{overdueCount}</span>
-            </div>
-          </div>
+
           {columns.length > 0 && (
             <div className="flex items-center gap-3">
               <div className="relative w-64 md:w-80">
@@ -547,7 +505,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                   placeholder="Search tasks..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 w-full pl-9 pr-4 rounded-full border-slate-200 bg-white focus-visible:ring-primary text-slate-800 font-medium"
+                  className="h-9 w-full pl-9 pr-4 rounded-full border-slate-200 bg-white focus-visible:ring-primary focus-visible:border-primary text-slate-800 font-medium transition-all"
                 />
                 {searchQuery && (
                   <button
@@ -566,7 +524,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                   setFocusColumnIndex(0);
                   setIsFocusMode(true);
                 }}
-                className="flex items-center gap-1.5 rounded-full px-4 border-primary/20 hover:border-primary/50 text-slate-700 font-semibold shadow-sm"
+                className="flex items-center gap-1.5 rounded-full px-4 border-primary text-primary hover:bg-primary hover:text-white font-semibold shadow-sm transition-all"
               >
                 <Maximize2 className="h-4 w-4" /> Focus Mode
               </Button>
@@ -605,7 +563,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
               {!isAddingColumn ? (
                 <Button
                   variant="outline"
-                  className="w-full justify-start border-dashed bg-transparent"
+                  className="w-full justify-start border-dashed bg-transparent text-primary border-primary/40 hover:bg-primary/5 hover:text-primary transition-colors"
                   onClick={() => setIsAddingColumn(true)}
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -737,7 +695,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                           >
                             <Circle className="h-5 w-5" />
                           </button>
-                          <span className="font-semibold text-slate-800 text-[15px] leading-snug break-all">
+                          <span className="font-bold text-[16px] leading-snug break-all text-slate-800">
                             {task.title}
                           </span>
                         </div>
@@ -793,7 +751,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
                             >
                               <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-50 bg-white rounded-full" />
                             </button>
-                            <span className="font-medium text-slate-400 line-through text-[14px] leading-snug truncate">
+                            <span className="font-bold text-[16px] leading-snug break-all text-slate-400 line-through">
                               {task.title}
                             </span>
                           </div>

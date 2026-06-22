@@ -90,18 +90,13 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
           const isIgnored = ignoredTaskIds.has(task.id);
           const showRecoveryOptions = isOverdue && !isIgnored;
           
-          let cardStyles = "border-slate-200 bg-white hover:border-primary/20 hover:shadow-md";
-          if (isCompleted) {
-            cardStyles = "bg-[#ECFDF5] border-[#22C55E]";
-          } else if (isOverdue) {
-            cardStyles = "bg-[#FEF2F2] border-[#EF4444]";
-          }
+          let cardStyles = "border-slate-200 bg-white hover:border-primary/40 hover:shadow-lg";
 
           return (
             <div 
               key={task.id} 
               onClick={() => setSelectedTask(task)}
-              className={cn("flex flex-col rounded-xl border p-4 shadow-sm cursor-pointer transition-all gap-3 min-h-[120px] justify-center", cardStyles)}
+              className={cn("flex flex-col rounded-xl border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] cursor-pointer transition-all duration-300 ease-in-out hover:-translate-y-1 gap-3 min-h-[120px] justify-center", cardStyles)}
             >
               <div className="flex items-start gap-3">
                 {isCompleted ? (
@@ -119,7 +114,7 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
                 
                 <div className="flex flex-col gap-2.5 flex-1 min-w-0">
                   {/* 1. Task Title */}
-                  <div className={cn("font-bold text-[16px] leading-snug break-all", isCompleted ? "text-emerald-900" : isOverdue ? "text-red-900" : "text-slate-800")}>
+                  <div className={cn("font-bold text-[16px] leading-snug break-all", isCompleted ? "text-slate-500 line-through opacity-70" : "text-slate-800")}>
                     {task.title}
                   </div>
 
@@ -138,15 +133,15 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
 
                   {/* Optional Badges (Variant tracking) */}
                   {variant === "completed" && task.completedAt && (
-                    <div className="flex items-center gap-1.5 text-sm font-bold text-emerald-700">
-                      <CheckCircle2 className="h-4 w-4" />
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100 self-start">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
                       Completed: {new Date(task.completedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })} {new Date(task.completedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </div>
                   )}
                   {variant === "overdue" && task.endTime && (
-                    <div className="flex items-center gap-1.5 text-sm font-bold text-red-700">
-                      <AlertCircle className="h-4 w-4" />
-                      Delayed: {Math.max(1, Math.floor((Date.now() - new Date(task.endTime).getTime()) / (1000 * 60 * 60 * 24)))} Days
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-100 self-start">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Overdue by {Math.max(1, Math.floor((Date.now() - new Date(task.endTime).getTime()) / (1000 * 60 * 60 * 24)))} Days
                     </div>
                   )}
 

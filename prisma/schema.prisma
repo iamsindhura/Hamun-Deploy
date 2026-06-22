@@ -15,8 +15,13 @@ model User {
   image         String?
   emailVerified DateTime?
   createdAt     DateTime           @default(now())
-  workdayEnd    String             @default("18:00")
-  workdayStart  String             @default("09:00")
+  workdayEnd              String             @default("18:00")
+  workdayStart            String             @default("09:00")
+  audioCuesEnabled        Boolean            @default(true)
+  audioCheckpointsEnabled Boolean            @default(true)
+  audioWarningEnabled     Boolean            @default(true)
+  audioVolume             String             @default("HIGH")
+  
   accounts      Account[]
   contacts      Contact[]
   focusSessions FocusSession[]
@@ -134,6 +139,7 @@ model TaskColumn {
   name      String
   position  Float
   projectId String
+  color     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   tasks     Task[]

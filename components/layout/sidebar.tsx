@@ -151,7 +151,7 @@ function SortableProjectItem({
         onClick={onClose}
         className={cn(
           "flex flex-1 items-center gap-2.5 px-3 py-2 text-sm font-medium transition-all pl-8 pr-24 whitespace-normal break-all",
-          pathname === `/tasks/${project.id}` && "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-white/10 rounded-lg"
+          pathname === `/tasks/${project.id}` && "bg-primary/10 text-primary font-semibold shadow-sm rounded-lg"
         )}
       >
         <div className="relative shrink-0">
@@ -264,7 +264,7 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
   }, [projects]);
 
   useEffect(() => {
-    if (pathname.startsWith("/tasks")) {
+    if (pathname.startsWith("/tasks") || pathname.startsWith("/deep-work") || pathname.startsWith("/focus")) {
       setActiveTab("tasks");
     } else {
       setActiveTab("crm");
@@ -406,7 +406,7 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
                       route.active(pathname)
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-white/10"
+                        ? "bg-primary/10 text-primary shadow-sm font-semibold"
                         : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     )}
                   >
@@ -433,7 +433,7 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
                       className={cn(
                         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
                         list.active(pathname)
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-white/10"
+                          ? "bg-primary/10 text-primary shadow-sm font-semibold"
                           : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                       )}
                     >

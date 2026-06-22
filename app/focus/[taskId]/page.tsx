@@ -21,5 +21,15 @@ export default async function FocusPage({ params }: { params: Promise<{ taskId: 
     redirect("/deep-work");
   }
 
-  return <FocusTimer task={task} />;
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      audioCuesEnabled: true,
+      audioCheckpointsEnabled: true,
+      audioWarningEnabled: true,
+      audioVolume: true,
+    }
+  });
+
+  return <FocusTimer task={task} audioSettings={dbUser as any} />;
 }

@@ -82,7 +82,7 @@ export default async function TodayTasksPage() {
   };
   
   const totalWorkdayMinutes = parseTime(workdayEnd) - parseTime(workdayStart);
-  const freeMinutes = Math.max(0, totalWorkdayMinutes - plannedMinutes);
+  const availableCapacityMinutes = Math.max(0, totalWorkdayMinutes - plannedMinutes);
 
   const formatDuration = (totalMinutes: number) => {
     if (totalMinutes === 0) return "0h";
@@ -95,7 +95,7 @@ export default async function TodayTasksPage() {
   };
 
   const plannedFormatted = formatDuration(plannedMinutes);
-  const freeFormatted = formatDuration(freeMinutes);
+  const availableCapacityFormatted = formatDuration(availableCapacityMinutes);
 
   return (
     <div className="flex h-full flex-col bg-slate-50/50">
@@ -117,10 +117,14 @@ export default async function TodayTasksPage() {
             <div className="text-4xl font-bold text-emerald-900">{plannedFormatted}</div>
           </div>
           
-          {/* Free Hours - Amber */}
-          <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px]">
-            <div className="text-xs font-semibold text-amber-600/80 uppercase tracking-wider mb-2">Free Hours</div>
-            <div className="text-4xl font-bold text-amber-900">{freeFormatted}</div>
+          {/* Available Capacity - Amber */}
+          <div 
+            className="bg-amber-50 rounded-2xl border border-amber-200 p-6 shadow-sm flex flex-col justify-center min-h-[120px] group relative"
+            title="Unscheduled workday time"
+          >
+            <div className="text-xs font-semibold text-amber-600/80 uppercase tracking-wider mb-2">Available Capacity</div>
+            <div className="text-4xl font-bold text-amber-900">{availableCapacityFormatted}</div>
+            <div className="text-[10px] font-medium text-amber-600/60 mt-1 leading-tight">Unscheduled workday time</div>
           </div>
           
           {/* Overdue - Red */}

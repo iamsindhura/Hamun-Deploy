@@ -7,12 +7,26 @@ import { createFocusSession } from "@/app/actions/focus";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export function FocusTimer({ task }: { task: any }) {
+import { playAudioCue } from "@/lib/audio";
+
+export function FocusTimer({ 
+  task, 
+  audioSettings 
+}: { 
+  task: any, 
+  audioSettings?: {
+    audioCuesEnabled: boolean;
+    audioCheckpointsEnabled: boolean;
+    audioWarningEnabled: boolean;
+    audioVolume: string;
+  }
+}) {
   const router = useRouter();
   
   const [isRunning, setIsRunning] = useState(false);
   const [actualSeconds, setActualSeconds] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   
   // Calculate total scheduled duration
   const start = new Date(task.startTime).getTime();
@@ -21,6 +35,26 @@ export function FocusTimer({ task }: { task: any }) {
   
   // Time remaining on the visual countdown
   const timeRemaining = Math.max(0, totalDurationSeconds - actualSeconds);
+
+  // Audio configuration
+  const cuesEnabled = audioSettings?.audioCuesEnabled ?? true;
+  const checkpointsEnabled = audioSettings?.audioCheckpointsEnabled ?? true;
+  const warningEnabled = audioSettings?.audioWarningEnabled ?? true;
+  const vol = (audioSettings?.audioVolume ?? "HIGH") as "LOW" | "MEDIUM" | "HIGH";
+
+  // Intelligent checkpoint scaling based on session duration
+  // If <= 15 min, checkpoint every 5 mins (300s)
+  // If <= 60 min, checkpoint every 10 mins (600s)
+  // Else, every 15 mins (900s)
+  const checkpointIntervalSeconds = totalDurationSeconds <= 900 
+    ? 300 
+    : totalDurationSeconds <= 3600 
+      ? 600 
+      : 900;
+
+  const lastCheckpointRef = useRef(0);
+  const hasPlayedWarningRef = useRef(false);
+  const hasPlayedCompleteRef = useRef(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -31,6 +65,40 @@ export function FocusTimer({ task }: { task: any }) {
     }
     return () => clearInterval(interval);
   }, [isRunning, timeRemaining]);
+
+  useEffect(() => {
+    if (!isRunning || !cuesEnabled) return;
+    
+    if (checkpointsEnabled && actualSeconds > 0 && actualSeconds % checkpointIntervalSeconds === 0) {
+      if (lastCheckpointRef.current !== actualSeconds) {
+        lastCheckpointRef.current = actualSeconds;
+        playAudioCue('checkpoint', vol);
+      }
+    }
+
+    if (warningEnabled && timeRemaining === 300) {
+      if (!hasPlayedWarningRef.current) {
+        hasPlayedWarningRef.current = true;
+        playAudioCue('warning', vol);
+      }
+    }
+
+    if (timeRemaining === 0 && actualSeconds > 0) {
+      if (!hasPlayedCompleteRef.current) {
+        hasPlayedCompleteRef.current = true;
+        playAudioCue('complete', vol);
+        setIsRunning(false);
+      }
+    }
+  }, [actualSeconds, timeRemaining, isRunning, cuesEnabled, checkpointsEnabled, warningEnabled, vol, checkpointIntervalSeconds]);
+
+  const handlePlayPause = () => {
+    if (!hasStarted && cuesEnabled && !isRunning) {
+      setHasStarted(true);
+      playAudioCue('start', vol);
+    }
+    setIsRunning(!isRunning);
+  };
 
   const handleComplete = async () => {
     if (isCompleting) return;
@@ -101,7 +169,7 @@ export function FocusTimer({ task }: { task: any }) {
 
         <div className="flex items-center gap-6">
           <button
-            onClick={() => setIsRunning(!isRunning)}
+            onClick={handlePlayPause}
             className={cn(
               "flex items-center justify-center h-20 w-20 rounded-full transition-all shadow-xl hover:scale-105 active:scale-95",
               isRunning 

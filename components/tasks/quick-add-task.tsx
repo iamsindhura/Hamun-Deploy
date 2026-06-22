@@ -9,17 +9,18 @@ import { TaskPriority, TaskType } from "@prisma/client";
 interface QuickAddTaskProps {
   columnId?: string;
   projectId: string;
+  className?: string;
   onAdd: (data: { title: string; startTime: Date; endTime: Date; priority: TaskPriority; taskType: TaskType }) => Promise<{ success: boolean; error?: string }>;
 }
 
-export function QuickAddTask({ columnId, projectId, onAdd }: QuickAddTaskProps) {
+export function QuickAddTask({ columnId, projectId, className, onAdd }: QuickAddTaskProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   return (
     <>
       <Button
         variant="ghost"
-        className="w-full justify-start text-muted-foreground hover:text-foreground"
+        className={className || "w-full justify-start text-primary hover:bg-primary/10 hover:text-primary transition-colors"}
         onClick={() => setIsDialogOpen(true)}
       >
         <Plus className="mr-2 h-4 w-4" />

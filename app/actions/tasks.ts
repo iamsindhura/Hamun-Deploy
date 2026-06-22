@@ -5,16 +5,32 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { TaskPriority, TaskType } from "@prisma/client";
 
+const SECTION_COLORS = ["purple", "blue", "emerald", "orange", "pink", "indigo", "teal", "rose"];
+
 // Columns
 export async function getColumns(projectId: string) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
-    const columns = await prisma.taskColumn.findMany({
+    let columns = await prisma.taskColumn.findMany({
       where: { projectId, project: { userId: session.user.id } },
       orderBy: { position: "asc" }
     });
+
+    let needsUpdate = false;
+    for (let i = 0; i < columns.length; i++) {
+      if (!columns[i].color) {
+        const assignedColor = SECTION_COLORS[i % SECTION_COLORS.length];
+        await prisma.taskColumn.update({
+          where: { id: columns[i].id },
+          data: { color: assignedColor }
+        });
+        columns[i].color = assignedColor;
+        needsUpdate = true;
+      }
+    }
+
     return { success: true, data: columns };
   } catch (error) {
     return { success: false, error: "Failed to fetch columns" };
@@ -28,11 +44,15 @@ export async function createColumn(data: { name: string; position: number; proje
   try {
     const project = await prisma.project.findFirst({ where: { id: data.projectId, userId: session.user.id } });
     if (!project) throw new Error("Not found");
+    
+    const assignedColor = SECTION_COLORS[data.position % SECTION_COLORS.length];
+    
     const column = await prisma.taskColumn.create({
       data: {
         name: data.name,
         position: data.position,
         projectId: data.projectId,
+        color: assignedColor,
       }
     });
     revalidatePath(`/tasks/${data.projectId}`);
@@ -141,6 +161,24 @@ export async function createTask(data: { title: string; description?: string; co
       if (new Date(data.endTime) <= new Date(data.startTime)) {
         return { success: false, error: "End time must be after start time." };
       }
+
+      // Workday Boundary Check
+      const dbUser = await prisma.user.findUnique({ where: { id: session.user.id }, select: { workdayStart: true, workdayEnd: true } });
+      const [wsH, wsM] = (dbUser?.workdayStart || "09:00").split(':').map(Number);
+      const [weH, weM] = (dbUser?.workdayEnd || "18:00").split(':').map(Number);
+
+      const stDate = new Date(data.startTime);
+      const etDate = new Date(data.endTime);
+      
+      const stMinutes = stDate.getHours() * 60 + stDate.getMinutes();
+      const etMinutes = etDate.getHours() * 60 + etDate.getMinutes();
+      const wsMinutes = wsH * 60 + wsM;
+      const weMinutes = weH * 60 + weM;
+
+      if (stMinutes < wsMinutes || etMinutes > weMinutes || stDate.getDate() !== etDate.getDate()) {
+        return { success: false, error: "Task must be scheduled within your workday hours." };
+      }
+
       const conflictResult = await checkTimeConflict(new Date(data.startTime), new Date(data.endTime));
       if (!conflictResult.success) {
         return { success: false, error: conflictResult.error };
@@ -186,6 +224,24 @@ export async function updateTask(id: string, projectId: string, data: Partial<an
         if (new Date(finalEndTime) <= new Date(finalStartTime)) {
           return { success: false, error: "End time must be after start time." };
         }
+
+        // Workday Boundary Check
+        const dbUser = await prisma.user.findUnique({ where: { id: session.user.id }, select: { workdayStart: true, workdayEnd: true } });
+        const [wsH, wsM] = (dbUser?.workdayStart || "09:00").split(':').map(Number);
+        const [weH, weM] = (dbUser?.workdayEnd || "18:00").split(':').map(Number);
+
+        const stDate = new Date(finalStartTime);
+        const etDate = new Date(finalEndTime);
+        
+        const stMinutes = stDate.getHours() * 60 + stDate.getMinutes();
+        const etMinutes = etDate.getHours() * 60 + etDate.getMinutes();
+        const wsMinutes = wsH * 60 + wsM;
+        const weMinutes = weH * 60 + weM;
+
+        if (stMinutes < wsMinutes || etMinutes > weMinutes || stDate.getDate() !== etDate.getDate()) {
+          return { success: false, error: "Task must be scheduled within your workday hours." };
+        }
+
         const conflictResult = await checkTimeConflict(new Date(finalStartTime), new Date(finalEndTime), id);
         if (!conflictResult.success) {
           return { success: false, error: conflictResult.error };
@@ -295,27 +351,37 @@ export async function recoverOverdueTask(taskId: string, actionType: 'MOVE_TOMOR
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const targetStart = new Date(tomorrow);
+      const tomorrowStart = new Date(tomorrow);
+      tomorrowStart.setHours(wsH, wsM, 0, 0);
+      const tomorrowEnd = new Date(tomorrow);
+      tomorrowEnd.setHours(weH, weM, 0, 0);
+
+      let targetStart = new Date(tomorrow);
       targetStart.setHours(task.startTime.getHours(), task.startTime.getMinutes(), 0, 0);
-      const targetEnd = new Date(targetStart.getTime() + durationMs);
+      let targetEnd = new Date(targetStart.getTime() + durationMs);
 
-      const conflictCheck = await checkTimeConflict(targetStart, targetEnd, taskId);
+      if (targetStart.getTime() < tomorrowStart.getTime()) {
+        targetStart = new Date(tomorrowStart);
+        targetEnd = new Date(targetStart.getTime() + durationMs);
+      }
+
+      let canUseOriginalSlot = targetEnd.getTime() <= tomorrowEnd.getTime();
+
+      if (canUseOriginalSlot) {
+        const conflictCheck = await checkTimeConflict(targetStart, targetEnd, taskId);
+        if (conflictCheck.success) {
+          await prisma.task.update({
+            where: { id: taskId },
+            data: { startTime: targetStart, endTime: targetEnd, dueDate: targetStart }
+          });
+          revalidatePath(`/tasks/overdue`);
+          revalidatePath(`/tasks/upcoming`);
+          return { success: true };
+        }
+      }
       
-      if (conflictCheck.success) {
-        await prisma.task.update({
-          where: { id: taskId },
-          data: { startTime: targetStart, endTime: targetEnd, dueDate: targetStart }
-        });
-        revalidatePath(`/tasks/overdue`);
-        revalidatePath(`/tasks/upcoming`);
-        return { success: true };
-      } else {
-        const tomorrowStart = new Date(tomorrow);
-        tomorrowStart.setHours(wsH, wsM, 0, 0);
-        const tomorrowEnd = new Date(tomorrow);
-        tomorrowEnd.setHours(weH, weM, 0, 0);
-
-        const activeTasksTomorrow = await prisma.task.findMany({
+      // If original slot is occupied or out of bounds, search for next free slot tomorrow
+      const activeTasksTomorrow = await prisma.task.findMany({
           where: {
             userId: session.user.id,
             isCompleted: false,
@@ -356,7 +422,6 @@ export async function recoverOverdueTask(taskId: string, actionType: 'MOVE_TOMOR
         } else {
            return { success: false, error: "Tomorrow is completely booked. Please reschedule manually." };
         }
-      }
     } else if (actionType === 'MOVE_NEXT_FREE_SLOT') {
       const now = new Date();
       

@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { TaskListView } from "@/components/tasks/task-list-view";
+import { AudioSettingsCard } from "@/components/deep-work/audio-settings-card";
 
 function formatDuration(totalMs: number) {
   if (totalMs <= 0) return "0h";
@@ -24,6 +25,16 @@ function getLocalDayString(d: Date) {
 export default async function DeepWorkPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      audioCuesEnabled: true,
+      audioCheckpointsEnabled: true,
+      audioWarningEnabled: true,
+      audioVolume: true,
+    }
+  });
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -310,6 +321,9 @@ export default async function DeepWorkPage() {
                 </div>
               </div>
             </div>
+            {dbUser && (
+              <AudioSettingsCard initialSettings={dbUser as any} />
+            )}
           </div>
         </div>
 
