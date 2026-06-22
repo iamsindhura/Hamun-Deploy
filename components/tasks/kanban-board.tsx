@@ -346,6 +346,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       name: newColumnName.trim(),
       position: columns.length,
       projectId,
+      color: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
