@@ -21,6 +21,7 @@ model User {
   audioCheckpointsEnabled Boolean            @default(true)
   audioWarningEnabled     Boolean            @default(true)
   audioVolume             String             @default("HIGH")
+  theme                   String             @default("LIGHT")
   
   accounts      Account[]
   contacts      Contact[]

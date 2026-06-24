@@ -7,37 +7,37 @@ import { TaskReminderProvider } from "@/components/providers/task-reminder-provi
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardLayout({
-  children,
+ children,
 }: {
-  children: React.ReactNode;
+ children: React.ReactNode;
 }) {
-  const session = await auth();
+ const session = await auth();
 
-  if (!session?.user) {
-    redirect("/login");
-  }
+ if (!session?.user) {
+ redirect("/login");
+ }
 
-  const projects = await prisma.project.findMany({
-    where: { userId: session.user.id },
-    orderBy: [
-      { isPinned: "desc" },
-      { position: "asc" },
-      { createdAt: "asc" }
-    ]
-  });
+ const projects = await prisma.project.findMany({
+ where: { userId: session.user.id },
+ orderBy: [
+ { isPinned: "desc" },
+ { position: "asc" },
+ { createdAt: "asc" }
+ ]
+ });
 
-  const serializedProjects = projects.map(p => ({
-    ...p,
-    createdAt: p.createdAt.toISOString(),
-    updatedAt: p.updatedAt.toISOString(),
-  }));
+ const serializedProjects = projects.map(p => ({
+ ...p,
+ createdAt: p.createdAt.toISOString(),
+ updatedAt: p.updatedAt.toISOString(),
+ }));
 
-  return (
-    <ResponsiveLayout projects={serializedProjects}>
-      <TaskReminderProvider>
-        <AutoFollowUpTrigger />
-        {children}
-      </TaskReminderProvider>
-    </ResponsiveLayout>
-  );
+ return (
+ <ResponsiveLayout projects={serializedProjects}>
+ <TaskReminderProvider>
+ <AutoFollowUpTrigger />
+ {children}
+ </TaskReminderProvider>
+ </ResponsiveLayout>
+ );
 }

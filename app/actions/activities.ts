@@ -6,73 +6,73 @@ import { revalidatePath } from "next/cache";
 import { ActivityType } from "@prisma/client";
 
 export async function getActivities(contactId: string) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
-  }
+ const session = await auth();
+ if (!session?.user?.id) {
+ throw new Error("Unauthorized");
+ }
 
-  return await prisma.activity.findMany({
-    where: { contactId },
-    orderBy: { createdAt: "desc" },
-  });
+ return await prisma.activity.findMany({
+ where: { contactId },
+ orderBy: { createdAt: "desc" },
+ });
 }
 
 export async function createActivity(contactId: string, type: ActivityType, content: string) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "Unauthorized" };
-  }
+ const session = await auth();
+ if (!session?.user?.id) {
+ return { success: false, error: "Unauthorized" };
+ }
 
-  try {
-    const activity = await prisma.activity.create({
-      data: {
-        contactId,
-        type,
-        content,
-      },
-    });
-    await prisma.contact.update({
-      where: {
-        id: contactId,
-      },
-      data: {
-        followUpCount: {
-          increment: 1,
-        },
-        lastContactedAt: new Date(),
-      },
-    });
+ try {
+ const activity = await prisma.activity.create({
+ data: {
+ contactId,
+ type,
+ content,
+ },
+ });
+ await prisma.contact.update({
+ where: {
+ id: contactId,
+ },
+ data: {
+ followUpCount: {
+ increment: 1,
+ },
+ lastContactedAt: new Date(),
+ },
+ });
 
-    // Auto-complete any open Follow Up tasks for this contact
-    const followUpsProject = await prisma.project.findFirst({
-      where: {
-        userId: session.user.id,
-        name: "Follow Ups"
-      }
-    });
+ // Auto-complete any open Follow Up tasks for this contact
+ const followUpsProject = await prisma.project.findFirst({
+ where: {
+ userId: session.user.id,
+ name: "Follow Ups"
+ }
+ });
 
-    if (followUpsProject) {
-      await prisma.task.updateMany({
-        where: {
-          contactId,
-          projectId: followUpsProject.id,
-          isCompleted: false,
-        },
-        data: {
-          isCompleted: true,
-        },
-      });
-    }
+ if (followUpsProject) {
+ await prisma.task.updateMany({
+ where: {
+ contactId,
+ projectId: followUpsProject.id,
+ isCompleted: false,
+ },
+ data: {
+ isCompleted: true,
+ },
+ });
+ }
 
-    revalidatePath("/contacts");
-    revalidatePath("/kanban");
-    revalidatePath("/tasks");
-    revalidatePath("/tasks/today");
-    revalidatePath("/tasks/upcoming");
+ revalidatePath("/contacts");
+ revalidatePath("/kanban");
+ revalidatePath("/tasks");
+ revalidatePath("/tasks/today");
+ revalidatePath("/tasks/upcoming");
 
-    return { success: true, data: activity };
-  } catch (error) {
-    console.error("Failed to create activity:", error);
-    return { success: false, error: "Database error" };
-  }
+ return { success: true, data: activity };
+ } catch (error) {
+ console.error("Failed to create activity:", error);
+ return { success: false, error: "Database error" };
+ }
 }
