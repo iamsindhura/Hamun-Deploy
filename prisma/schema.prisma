@@ -8,28 +8,27 @@ datasource db {
 }
 
 model User {
-  id            String             @id @default(cuid())
-  email         String             @unique
-  name          String?
-  avatar        String?
-  image         String?
-  emailVerified DateTime?
-  createdAt     DateTime           @default(now())
+  id                      String             @id @default(cuid())
+  email                   String             @unique
+  name                    String?
+  avatar                  String?
+  image                   String?
+  emailVerified           DateTime?
+  createdAt               DateTime           @default(now())
   workdayEnd              String             @default("18:00")
   workdayStart            String             @default("09:00")
-  audioCuesEnabled        Boolean            @default(true)
   audioCheckpointsEnabled Boolean            @default(true)
-  audioWarningEnabled     Boolean            @default(true)
+  audioCuesEnabled        Boolean            @default(true)
   audioVolume             String             @default("HIGH")
+  audioWarningEnabled     Boolean            @default(true)
   theme                   String             @default("LIGHT")
-  
-  accounts      Account[]
-  contacts      Contact[]
-  focusSessions FocusSession[]
-  projects      Project[]
-  pushSubs      PushSubscription[]
-  sessions      Session[]
-  tasks         Task[]
+  accounts                Account[]
+  contacts                Contact[]
+  focusSessions           FocusSession[]
+  projects                Project[]
+  pushSubs                PushSubscription[]
+  sessions                Session[]
+  tasks                   Task[]
 }
 
 model Account {
@@ -140,9 +139,9 @@ model TaskColumn {
   name      String
   position  Float
   projectId String
-  color     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  color     String?
   tasks     Task[]
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -150,32 +149,32 @@ model TaskColumn {
 }
 
 model Task {
-  id            String         @id @default(cuid())
-  title         String
-  description   String?
-  isCompleted   Boolean        @default(false)
-  dueDate       DateTime?
-  reminderAt    DateTime?
-  priority      TaskPriority   @default(NONE)
-  isPinned      Boolean        @default(false)
-  position      Float
-  projectId     String
-  columnId      String?
-  userId        String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  contactId     String?
-  endTime       DateTime?
-  startTime     DateTime?
-  taskType      TaskType       @default(GENERAL)
-  completedAt   DateTime?
+  id                       String         @id @default(cuid())
+  title                    String
+  description              String?
+  isCompleted              Boolean        @default(false)
+  dueDate                  DateTime?
+  reminderAt               DateTime?
+  priority                 TaskPriority   @default(NONE)
+  isPinned                 Boolean        @default(false)
+  position                 Float
+  projectId                String
+  columnId                 String?
+  userId                   String
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  contactId                String?
+  endTime                  DateTime?
+  startTime                DateTime?
+  taskType                 TaskType       @default(GENERAL)
+  completedAt              DateTime?
   estimatedDurationMinutes Int?
-  focusSessions FocusSession[]
-  subtasks      Subtask[]
-  column        TaskColumn?    @relation(fields: [columnId], references: [id])
-  contact       Contact?       @relation(fields: [contactId], references: [id])
-  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  focusSessions            FocusSession[]
+  subtasks                 Subtask[]
+  column                   TaskColumn?    @relation(fields: [columnId], references: [id])
+  contact                  Contact?       @relation(fields: [contactId], references: [id])
+  project                  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([columnId])

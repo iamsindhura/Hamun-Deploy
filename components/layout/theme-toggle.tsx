@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { updateTheme } from "@/app/actions/user";
@@ -13,14 +14,25 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function ThemeToggle() {
- const { setTheme, theme } = useTheme();
+  const { setTheme, theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
- const handleSetTheme = async (newTheme: string) => {
- setTheme(newTheme);
- await updateTheme(newTheme.toUpperCase());
- };
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
- return (
+  const handleSetTheme = async (newTheme: string) => {
+    setTheme(newTheme);
+    await updateTheme(newTheme.toUpperCase());
+  };
+
+  if (!mounted) {
+    return (
+      <div className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-9 w-9 opacity-0")} />
+    );
+  }
+
+  return (
  <DropdownMenu>
  <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-9 w-9 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-50")}>
  <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />

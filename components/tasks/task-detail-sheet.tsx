@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Task, TaskPriority, TaskType } from "@prisma/client";
+import { TaskActionConfirmations, TaskActionType } from "./task-action-confirmations";
 import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, checkTimeConflict } from "@/app/actions/tasks";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
@@ -64,7 +65,8 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
  }
  }, [task]);
 
- const [conflictError, setConflictError] = useState("");
+ const [conflictError, setConflictError] = useState<string | null>(null);
+ const [confirmAction, setConfirmAction] = useState<TaskActionType>(null);
 
  useEffect(() => {
  if (startTime && endTime && task?.id) {
@@ -186,10 +188,8 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
  }
  };
 
- const handleDelete = async () => {
- onDelete(task.id); // optimistic
- await deleteTask(task.id, projectId);
- onClose();
+ const handleDelete = () => {
+    setConfirmAction('DELETE');
  };
 
  const handleAddSubtask = async (e: React.FormEvent) => {
@@ -437,6 +437,18 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
  <Button onClick={onClose} disabled={!!conflictError}>Save</Button>
  </div>
  </SheetContent>
+ <TaskActionConfirmations
+        task={task}
+        actionType={confirmAction}
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onSuccess={(taskId, actionType) => {
+          if (actionType === 'DELETE' && onDelete) {
+            onDelete(taskId);
+            onClose();
+          }
+        }}
+      />
  </Sheet>
  );
 }

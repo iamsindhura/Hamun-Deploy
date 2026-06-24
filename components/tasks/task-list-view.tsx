@@ -13,6 +13,7 @@ import { useTaskReminders } from "@/components/providers/task-reminder-provider"
 import { useRouter } from "next/navigation";
 import { FocusDurationDialog } from "@/components/tasks/focus-duration-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TaskActionConfirmations, TaskActionType } from "./task-action-confirmations";
 
 interface TaskListViewProps {
  tasks: any[];
@@ -29,6 +30,9 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  const [ignoredTaskIds, setIgnoredTaskIds] = useState<Set<string>>(new Set());
  const [recoveringTaskId, setRecoveringTaskId] = useState<string | null>(null);
  const [completingTask, setCompletingTask] = useState<any | null>(null);
+
+ const [confirmTask, setConfirmTask] = useState<any | null>(null);
+ const [confirmAction, setConfirmAction] = useState<TaskActionType>(null);
 
  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
  const [activeFollowUpTask, setActiveFollowUpTask] = useState<any | null>(null);
@@ -271,32 +275,18 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  </DropdownMenuItem>
  </>
  )}
- <DropdownMenuItem onClick={async () => {
- setRecoveringTaskId(task.id);
- const result = await recoverOverdueTask(task.id, 'MOVE_TOMORROW');
- setRecoveringTaskId(null);
- if (result.success) {
- toast.success("Task moved to tomorrow");
- setTasks(prev => prev.filter(t => t.id !== task.id));
- } else {
- toast.error(result.error);
- }
- }}>
- <ArrowRight className="h-4 w-4 mr-2" /> Move to Tomorrow
- </DropdownMenuItem>
- <DropdownMenuItem onClick={async () => {
- setRecoveringTaskId(task.id);
- const result = await recoverOverdueTask(task.id, 'MOVE_NEXT_FREE_SLOT');
- setRecoveringTaskId(null);
- if (result.success) {
- toast.success("Task moved to next free slot");
- setTasks(prev => prev.filter(t => t.id !== task.id));
- } else {
- toast.error(result.error);
- }
- }}>
- <Clock className="h-4 w-4 mr-2" /> Move to Next Free Slot
- </DropdownMenuItem>
+ <DropdownMenuItem onClick={() => {
+            setConfirmTask(task);
+            setConfirmAction('MOVE_TOMORROW');
+          }}>
+            <ArrowRight className="h-4 w-4 mr-2" /> Move to Tomorrow
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => {
+            setConfirmTask(task);
+            setConfirmAction('MOVE_NEXT_FREE_SLOT');
+          }}>
+            <Clock className="h-4 w-4 mr-2" /> Move to Next Free Slot
+          </DropdownMenuItem>
  {variant === "overdue" && (
  <DropdownMenuItem onClick={() => {
  setIgnoredTaskIds(prev => {
@@ -342,16 +332,15 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  )}
 
  <DropdownMenuSeparator />
- <DropdownMenuItem 
- className="text-red-600 focus:text-red-600 focus:bg-red-50" 
- onClick={async () => {
- setTasks(prev => prev.filter(t => t.id !== task.id));
- await deleteTask(task.id, task.projectId);
- toast.success("Task deleted");
- }}
- >
- <Trash2 className="h-4 w-4 mr-2" /> Delete Task
- </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                onClick={() => {
+                  setConfirmTask(task);
+                  setConfirmAction('DELETE');
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Delete Task
+              </DropdownMenuItem>
  </DropdownMenuContent>
  </DropdownMenu>
  </div>
@@ -401,6 +390,21 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  onSave={(note) => executeCompletion(note)}
  onSkip={() => executeCompletion()}
  />
+
+ <TaskActionConfirmations
+          task={confirmTask}
+          actionType={confirmAction}
+          isOpen={!!confirmTask && !!confirmAction}
+          onClose={() => {
+            setConfirmTask(null);
+            setConfirmAction(null);
+          }}
+          onSuccess={(taskId, actionType) => {
+            if (actionType === 'DELETE' || actionType === 'MOVE_TOMORROW' || actionType === 'MOVE_NEXT_FREE_SLOT') {
+              setTasks(prev => prev.filter(t => t.id !== taskId));
+            }
+          }}
+        />
  </>
  );
 }

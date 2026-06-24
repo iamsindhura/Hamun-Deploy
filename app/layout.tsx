@@ -31,7 +31,7 @@ export default function RootLayout({
  <link rel="manifest" href="/manifest.json" />
  </head>
  <body className={inter.className}>
- <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+ <ThemeProvider>
  <PushProvider>
  {children}
  </PushProvider>

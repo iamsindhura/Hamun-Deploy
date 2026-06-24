@@ -466,6 +466,144 @@ export async function recoverOverdueTask(taskId: string, actionType: 'MOVE_TOMOR
  return { success: false, error: "Invalid action" };
 }
 
+export async function previewTaskMove(taskId: string, actionType: 'MOVE_TOMORROW' | 'MOVE_NEXT_FREE_SLOT') {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const task = await prisma.task.findUnique({ where: { id: taskId, userId: session.user.id } });
+    if (!task) return { success: false, error: "Task not found" };
+
+    const wsH = 0; const wsM = 0;
+    const weH = 23; const weM = 59;
+    
+    // Support unscheduled tasks for MOVE_NEXT_FREE_SLOT
+    if (actionType === 'MOVE_TOMORROW' && (!task.startTime || !task.endTime)) {
+      return { success: false, error: "Cannot move unscheduled task to tomorrow. Use Next Free Slot." };
+    }
+
+    const durationMs = task.startTime && task.endTime 
+      ? task.endTime.getTime() - task.startTime.getTime()
+      : (task.estimatedDurationMinutes || 30) * 60 * 1000;
+
+    if (actionType === 'MOVE_TOMORROW' && task.startTime) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const tomorrowStart = new Date(tomorrow);
+      tomorrowStart.setHours(wsH, wsM, 0, 0);
+      const tomorrowEnd = new Date(tomorrow);
+      tomorrowEnd.setHours(weH, weM, 59, 999);
+
+      let targetStart = new Date(tomorrow);
+      targetStart.setHours(task.startTime.getHours(), task.startTime.getMinutes(), 0, 0);
+      let targetEnd = new Date(targetStart.getTime() + durationMs);
+
+      if (targetStart.getTime() < tomorrowStart.getTime()) {
+        targetStart = new Date(tomorrowStart);
+        targetEnd = new Date(targetStart.getTime() + durationMs);
+      }
+
+      let canUseOriginalSlot = targetEnd.getTime() <= tomorrowEnd.getTime();
+
+      if (canUseOriginalSlot) {
+        const conflictCheck = await checkTimeConflict(targetStart, targetEnd, taskId);
+        if (conflictCheck.success) {
+          return { success: true, newStartTime: targetStart, newEndTime: targetEnd };
+        }
+      }
+      
+      const activeTasksTomorrow = await prisma.task.findMany({
+        where: {
+          userId: session.user.id,
+          isCompleted: false,
+          startTime: { gte: tomorrowStart, lt: tomorrowEnd },
+          id: { not: taskId }
+        },
+        orderBy: { startTime: 'asc' }
+      });
+
+      let currentTestStart = new Date(Math.max(tomorrowStart.getTime(), targetStart.getTime()));
+      let foundSlot = false;
+
+      for (const t of activeTasksTomorrow) {
+        if (!t.startTime || !t.endTime) continue;
+        if (currentTestStart.getTime() + durationMs <= t.startTime.getTime()) {
+          foundSlot = true;
+          break;
+        }
+        currentTestStart = new Date(Math.max(currentTestStart.getTime(), t.endTime.getTime()));
+      }
+
+      if (!foundSlot && currentTestStart.getTime() + durationMs <= tomorrowEnd.getTime()) {
+        foundSlot = true;
+      }
+
+      if (foundSlot) {
+        return { success: true, newStartTime: currentTestStart, newEndTime: new Date(currentTestStart.getTime() + durationMs) };
+      } else {
+        return { success: false, error: "Tomorrow is completely booked. Please reschedule manually." };
+      }
+
+    } else if (actionType === 'MOVE_NEXT_FREE_SLOT') {
+      const now = new Date();
+      
+      for (let dayOffset = 0; dayOffset <= 14; dayOffset++) {
+        const testDate = new Date(now);
+        testDate.setDate(testDate.getDate() + dayOffset);
+        
+        const dayStart = new Date(testDate);
+        dayStart.setHours(wsH, wsM, 0, 0);
+        
+        const dayEnd = new Date(testDate);
+        dayEnd.setHours(weH, weM, 59, 999);
+        
+        let searchStart = dayStart;
+        if (dayOffset === 0) {
+          searchStart = new Date(Math.max(now.getTime(), dayStart.getTime()));
+          if (searchStart.getTime() + durationMs > dayEnd.getTime()) continue;
+        }
+        
+        const activeTasks = await prisma.task.findMany({
+          where: {
+            userId: session.user.id,
+            isCompleted: false,
+            startTime: { gte: dayStart, lt: dayEnd },
+            id: { not: taskId }
+          },
+          orderBy: { startTime: 'asc' }
+        });
+
+        let currentTestStart = new Date(searchStart);
+        let foundSlot = false;
+
+        for (const t of activeTasks) {
+          if (!t.startTime || !t.endTime) continue;
+          if (currentTestStart.getTime() + durationMs <= t.startTime.getTime()) {
+            foundSlot = true;
+            break;
+          }
+          currentTestStart = new Date(Math.max(currentTestStart.getTime(), t.endTime.getTime()));
+        }
+
+        if (!foundSlot && currentTestStart.getTime() + durationMs <= dayEnd.getTime()) {
+          foundSlot = true;
+        }
+
+        if (foundSlot) {
+          return { success: true, newStartTime: currentTestStart, newEndTime: new Date(currentTestStart.getTime() + durationMs) };
+        }
+      }
+      return { success: false, error: "Could not find a free slot in the next 14 days." };
+    }
+
+    return { success: false, error: "Invalid action" };
+  } catch (error) {
+    console.error("Failed to preview task move:", error);
+    return { success: false, error: "Failed to preview task move" };
+  }
+}
+
 export async function scheduleUnscheduledTask(taskId: string) {
  const session = await auth();
  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
