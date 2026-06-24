@@ -25,17 +25,19 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [taskType, setTaskType] = useState<TaskType>("GENERAL");
+  const [estimatedDurationMinutes, setEstimatedDurationMinutes] = useState<string>("30");
   const [subtasks, setSubtasks] = useState<any[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [error, setError] = useState("");
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
-  
+
   useEffect(() => {
     if (task) {
       setTitle(task.title);
       setDescription(task.description || "");
       setPriority(task.priority);
       setTaskType(task.taskType || "GENERAL");
+      setEstimatedDurationMinutes(task.estimatedDurationMinutes ? String(task.estimatedDurationMinutes) : "30");
       setSubtasks(task.subtasks || []);
       if (task.dueDate) {
         const d = new Date(task.dueDate);
@@ -46,7 +48,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       } else {
         setDueDate("");
       }
-      
+
       const formatLocalTime = (dateStr: string) => {
         const d = new Date(dateStr);
         // Format to YYYY-MM-DDThh:mm
@@ -91,7 +93,8 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
     const finalDesc = updates.description !== undefined ? updates.description : description;
     const finalPriority = updates.priority !== undefined ? updates.priority : priority;
     const finalTaskType = updates.taskType !== undefined ? updates.taskType : taskType;
-    
+    const finalEstimatedDuration = updates.estimatedDurationMinutes !== undefined ? updates.estimatedDurationMinutes : (estimatedDurationMinutes ? parseInt(estimatedDurationMinutes) : null);
+
     let finalDueDate: Date | null = null;
     if (updates.dueDate !== undefined) {
       finalDueDate = updates.dueDate;
@@ -121,13 +124,14 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
       setConflictError("");
     }
 
-    const updated = { 
-      ...task, 
-      title: finalTitle, 
-      description: finalDesc, 
-      priority: finalPriority, 
+    const updated = {
+      ...task,
+      title: finalTitle,
+      description: finalDesc,
+      priority: finalPriority,
       dueDate: finalDueDate,
       taskType: finalTaskType,
+      estimatedDurationMinutes: finalEstimatedDuration,
       startTime: finalStartTime,
       endTime: finalEndTime
     };
@@ -136,12 +140,13 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
 
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
-      const result = await updateTask(task.id, projectId, { 
-        title: finalTitle, 
-        description: finalDesc, 
+      const result = await updateTask(task.id, projectId, {
+        title: finalTitle,
+        description: finalDesc,
         priority: finalPriority,
         dueDate: finalDueDate,
         taskType: finalTaskType,
+        estimatedDurationMinutes: finalEstimatedDuration,
         startTime: finalStartTime,
         endTime: finalEndTime
       });
@@ -226,8 +231,8 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
 
   return (
     <Sheet open={!!task} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent 
-        overlayClassName="bg-black/95" 
+      <SheetContent
+        overlayClassName="bg-black/95"
         darkHeader={true}
         className="data-[side=right]:sm:max-w-3xl flex flex-col h-full z-[100] p-0 overflow-hidden bg-white"
       >
@@ -237,14 +242,14 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
             <SheetDescription className="sr-only">Edit your task details</SheetDescription>
           </SheetHeader>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Task Title</label>
-            <Input 
+            <Input
               className="text-base font-medium h-12 bg-white"
-              value={title} 
-              onChange={(e) => setTitle(e.target.value)} 
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               onBlur={() => handleSave({ title })}
               placeholder="Task title..."
             />
@@ -267,18 +272,18 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
 
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Description</label>
-            <textarea 
+            <textarea
               className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Add details..."
-              value={description} 
+              value={description}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={() => handleSave({ description })}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Due Date</label>
-            <Input 
+            <label className="text-sm font-semibold text-slate-700">Due Date (Optional)</label>
+            <Input
               type="date"
               className="text-base font-medium h-12 bg-white"
               value={dueDate}
@@ -289,8 +294,8 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Start Time</label>
-              <Input 
+              <label className="text-sm font-semibold text-slate-700">Start Time (Optional)</label>
+              <Input
                 type="datetime-local"
                 className="text-base font-medium h-12 bg-white"
                 value={startTime}
@@ -299,8 +304,8 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">End Time</label>
-              <Input 
+              <label className="text-sm font-semibold text-slate-700">End Time (Optional)</label>
+              <Input
                 type="datetime-local"
                 className="text-base font-medium h-12 bg-white"
                 value={endTime}
@@ -329,10 +334,34 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
             </Select>
           </div>
 
+          {!startTime && !endTime && (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Estimated Duration</label>
+              <Select value={estimatedDurationMinutes} onValueChange={(val) => {
+                setEstimatedDurationMinutes(val || "");
+                if (val) {
+                  handleSave({ estimatedDurationMinutes: parseInt(val) });
+                }
+              }}>
+                <SelectTrigger className="h-12 bg-white">
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent className="z-[200]">
+                  <SelectItem value="15">15m</SelectItem>
+                  <SelectItem value="30">30m</SelectItem>
+                  <SelectItem value="45">45m</SelectItem>
+                  <SelectItem value="60">1h</SelectItem>
+                  <SelectItem value="90">1h 30m</SelectItem>
+                  <SelectItem value="120">2h</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Priority</label>
             <div className="flex flex-wrap gap-2">
-              <Button 
+              <Button
                 variant={priority === "HIGH" ? "default" : "outline"}
                 className={priority === "HIGH" ? "bg-red-500 hover:bg-red-600 text-white" : "bg-white"}
                 onClick={() => handlePriorityChange("HIGH")}
@@ -340,7 +369,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               >
                 <Flag className="w-3 h-3 mr-2" /> High
               </Button>
-              <Button 
+              <Button
                 variant={priority === "MEDIUM" ? "default" : "outline"}
                 className={priority === "MEDIUM" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "bg-white"}
                 onClick={() => handlePriorityChange("MEDIUM")}
@@ -348,7 +377,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
               >
                 <Flag className="w-3 h-3 mr-2" /> Medium
               </Button>
-              <Button 
+              <Button
                 variant={priority === "LOW" ? "default" : "outline"}
                 className={priority === "LOW" ? "bg-blue-500 hover:bg-blue-600 text-white" : "bg-white"}
                 onClick={() => handlePriorityChange("LOW")}
@@ -357,7 +386,7 @@ export function TaskDetailSheet({ task, onClose, onUpdate, onDelete, projectId }
                 <Flag className="w-3 h-3 mr-2" /> Low
               </Button>
               {priority !== "NONE" && (
-                <Button 
+                <Button
                   variant="ghost"
                   onClick={() => handlePriorityChange("NONE")}
                   size="sm"

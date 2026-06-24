@@ -58,27 +58,42 @@ export function TaskReminderProvider({ children }: { children: React.ReactNode }
       const now = new Date();
       
       tasks.forEach((task) => {
-        if (task.isCompleted || !task.startTime) return;
+        if (task.isCompleted) return;
 
-        const start = new Date(task.startTime);
-        const minutesUntilStart = (start.getTime() - now.getTime()) / 60000;
+        // Upcoming Check
+        if (task.startTime) {
+          const start = new Date(task.startTime);
+          const minutesUntilStart = (start.getTime() - now.getTime()) / 60000;
 
-        console.log(task.title, "starts in", minutesUntilStart, "minutes");
+          if (minutesUntilStart <= 5 && minutesUntilStart >= 0) {
+            const key = task.id + "-upcoming";
+            if (!notifiedTasks.current.has(key)) {
+              console.log("Task start time reached notification:", task.title);
+              notifiedTasks.current.add(key);
+              
+              new Notification("⏰ Upcoming Task", {
+                body: `${task.title}\nStarts in ${Math.ceil(minutesUntilStart)} minutes.`,
+              });
+            }
+          }
+        }
 
-        if (minutesUntilStart <= 5 && minutesUntilStart >= 0) {
-          if (notifiedTasks.current.has(task.id)) return;
+        // Overdue Check
+        if (task.endTime) {
+          const end = new Date(task.endTime);
+          const minutesUntilEnd = (end.getTime() - now.getTime()) / 60000;
 
-          console.log("Now:", now);
-          console.log("Task Start:", start);
-          console.log("Minutes Until Start:", minutesUntilStart);
-          
-          console.log("Notification fired:", task.title);
-          
-          notifiedTasks.current.add(task.id);
-          
-          new Notification("⏰ Upcoming Task", {
-            body: `${task.title}\n\nStarts in 5 minutes.`,
-          });
+          if (minutesUntilEnd < 0 && minutesUntilEnd >= -1) { // Only fire if it just became overdue
+            const key = task.id + "-overdue";
+            if (!notifiedTasks.current.has(key)) {
+              console.log("Task overdue notification:", task.title);
+              notifiedTasks.current.add(key);
+              
+              new Notification("🚨 Task Overdue", {
+                body: `${task.title}\nThis task is now overdue.`,
+              });
+            }
+          }
         }
       });
     };

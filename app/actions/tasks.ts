@@ -465,3 +465,93 @@ export async function recoverOverdueTask(taskId: string, actionType: 'MOVE_TOMOR
   
   return { success: false, error: "Invalid action" };
 }
+
+export async function scheduleUnscheduledTask(taskId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const task = await prisma.task.findUnique({ where: { id: taskId, userId: session.user.id } });
+    if (!task) return { success: false, error: "Task not found" };
+
+    const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!user) return { success: false, error: "User not found" };
+
+    const [wsH, wsM] = user.workdayStart.split(':').map(Number);
+    const [weH, weM] = user.workdayEnd.split(':').map(Number);
+
+    const durationMins = task.estimatedDurationMinutes || 30;
+    const durationMs = durationMins * 60 * 1000;
+
+    const now = new Date();
+    
+    // Look up to 14 days ahead
+    for (let dayOffset = 0; dayOffset <= 14; dayOffset++) {
+      const testDate = new Date(now);
+      testDate.setDate(testDate.getDate() + dayOffset);
+      
+      const dayStart = new Date(testDate);
+      dayStart.setHours(wsH, wsM, 0, 0);
+      
+      const dayEnd = new Date(testDate);
+      dayEnd.setHours(weH, weM, 59, 999);
+      
+      // If searching today, start from now if it's past workday start
+      let searchStart = dayStart;
+      if (dayOffset === 0) {
+        searchStart = new Date(Math.max(now.getTime(), dayStart.getTime()));
+        
+        // If we are already past the end of the workday, skip today
+        if (searchStart.getTime() + durationMs > dayEnd.getTime()) {
+          continue;
+        }
+      }
+      
+      const activeTasks = await prisma.task.findMany({
+        where: {
+          userId: session.user.id,
+          isCompleted: false,
+          startTime: { gte: dayStart, lt: dayEnd },
+          id: { not: taskId }
+        },
+        orderBy: { startTime: 'asc' }
+      });
+
+      let currentTestStart = new Date(searchStart);
+      let foundSlot = false;
+
+      for (const t of activeTasks) {
+        if (!t.startTime || !t.endTime) continue;
+        if (currentTestStart.getTime() + durationMs <= t.startTime.getTime()) {
+          foundSlot = true;
+          break;
+        }
+        currentTestStart = new Date(Math.max(currentTestStart.getTime(), t.endTime.getTime()));
+      }
+
+      if (!foundSlot && currentTestStart.getTime() + durationMs <= dayEnd.getTime()) {
+        foundSlot = true;
+      }
+
+      if (foundSlot) {
+         await prisma.task.update({
+           where: { id: taskId },
+           data: { 
+             startTime: currentTestStart, 
+             endTime: new Date(currentTestStart.getTime() + durationMs),
+             dueDate: currentTestStart
+           }
+         });
+         revalidatePath(`/tasks/today`);
+         revalidatePath(`/tasks/upcoming`);
+         revalidatePath(`/tasks/${task.projectId}`);
+         return { success: true };
+      }
+    }
+    
+    return { success: false, error: "Unable to find a free slot. Please manually reschedule." };
+  } catch (error) {
+    return { success: false, error: "Failed to schedule task" };
+  }
+}
+

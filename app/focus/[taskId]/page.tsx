@@ -12,13 +12,12 @@ export default async function FocusPage({ params }: { params: Promise<{ taskId: 
     where: { 
       id: taskId,
       userId: session.user.id,
-      taskType: "DEEP_WORK"
     },
     include: { project: true }
   });
 
-  if (!task || !task.startTime || !task.endTime) {
-    redirect("/deep-work");
+  if (!task) {
+    redirect("/tasks/today");
   }
 
   const dbUser = await prisma.user.findUnique({

@@ -1,33 +1,40 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, Circle, Calendar, Flag, AlertCircle } from "lucide-react";
+import { CheckCircle2, Circle, Calendar, Flag, AlertCircle, ArrowRight, Clock, X, Play, ArrowDown, MoreHorizontal, FileText, Trash2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TaskDetailSheet } from "./task-detail-sheet";
-import { updateTask, deleteTask, recoverOverdueTask } from "@/app/actions/tasks";
+import { updateTask, recoverOverdueTask, scheduleUnscheduledTask, deleteTask } from "@/app/actions/tasks";
 import { toast } from "sonner";
-import { ArrowRight, Clock, X, Play, ArrowDown } from "lucide-react";
 import { createActivity } from "@/app/actions/activities";
 import { FollowUpDialog } from "@/components/tasks/follow-up-dialog";
+import { CompletionReflectionDialog } from "./completion-reflection-dialog";
 import { useTaskReminders } from "@/components/providers/task-reminder-provider";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FocusDurationDialog } from "@/components/tasks/focus-duration-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface TaskListViewProps {
   tasks: any[];
   showDate?: boolean;
-  variant?: "default" | "completed" | "overdue";
+  variant?: "default" | "completed" | "overdue" | "unscheduled";
+  workdayStart?: string;
+  workdayEnd?: string;
 }
 
-export function TaskListView({ tasks: initialTasks, showDate = false, variant = "default" }: TaskListViewProps) {
+export function TaskListView({ tasks: initialTasks, showDate = false, variant = "default", workdayStart = "09:00", workdayEnd = "18:00" }: TaskListViewProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [focusTask, setFocusTask] = useState<any | null>(null);
   const [ignoredTaskIds, setIgnoredTaskIds] = useState<Set<string>>(new Set());
   const [recoveringTaskId, setRecoveringTaskId] = useState<string | null>(null);
+  const [completingTask, setCompletingTask] = useState<any | null>(null);
 
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [activeFollowUpTask, setActiveFollowUpTask] = useState<any | null>(null);
 
   const { setGlobalTasks } = useTaskReminders();
+  const router = useRouter();
 
   useEffect(() => {
     setGlobalTasks(tasks);
@@ -38,16 +45,54 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const isCompleting = !task.isCompleted;
+    if (task.isCompleted) {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: false } : t));
+      await updateTask(taskId, task.projectId, { isCompleted: false });
+    } else {
+      if (task.project?.name === "Follow Ups" && task.contactId) {
+        setActiveFollowUpTask(task);
+        setShowFollowUpDialog(true);
+        return;
+      }
+      setCompletingTask(task);
+    }
+  };
 
-    if (isCompleting && task.project?.name === "Follow Ups" && task.contactId) {
-      setActiveFollowUpTask(task);
-      setShowFollowUpDialog(true);
-      return;
+  const executeCompletion = async (note?: string) => {
+    if (!completingTask) return;
+    
+    const taskId = completingTask.id;
+    const task = completingTask;
+    setCompletingTask(null);
+
+    let newDescription = task.description || "";
+    if (note) {
+      const dateObj = new Date();
+      const datePart = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const timePart = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const timestamp = `${datePart} • ${timePart}`;
+      
+      const noteBlock = `${timestamp}\n${note}`;
+      
+      if (!newDescription.includes("Completion History")) {
+        newDescription = newDescription.trim() + (newDescription.trim() ? "\n\n" : "") + "Completion History\n\n" + noteBlock;
+      } else {
+        newDescription = newDescription.trim() + "\n\n" + noteBlock;
+      }
     }
 
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: isCompleting } : t));
-    await updateTask(taskId, task.projectId, { isCompleted: isCompleting });
+    setTasks(prev => prev.map(t => t.id === taskId ? { 
+      ...t, 
+      isCompleted: true,
+      description: newDescription,
+      completedAt: new Date()
+    } : t));
+
+    await updateTask(taskId, task.projectId, { 
+      isCompleted: true,
+      description: newDescription,
+      completedAt: new Date()
+    });
   };
 
   const handleFollowUpMethod = async (method: "CALL" | "EMAIL" | "MEETING" | "NONE", notes?: string) => {
@@ -65,7 +110,6 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
                     : "Follow-up meeting completed";
       
       const content = notes ? `${baseContent}\n\n${notes}` : baseContent;
-      // Cast to any to bypass strict type checking for the Prisma enum imported in the actions file
       await createActivity(task.contactId, method as any, content);
     }
     setActiveFollowUpTask(null);
@@ -76,8 +120,6 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
     if (!task) return;
     
     setTasks(prev => prev.filter(t => t.id !== taskId));
-    // The actual deletion API call happens inside TaskDetailSheet's handleDelete
-    // which calls the passed onDelete callback and the server action.
   };
 
   if (tasks.length === 0) {
@@ -95,155 +137,224 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
           const isOverdue = !task.isCompleted && task.endTime && new Date(task.endTime) < new Date();
           const isCompleted = task.isCompleted;
           const isIgnored = ignoredTaskIds.has(task.id);
-          const showRecoveryOptions = isOverdue && !isIgnored;
+          const showRecoveryOptions = isOverdue && !isIgnored && variant === "overdue";
+          const showUnscheduledOptions = variant === "unscheduled";
           
-          let cardStyles = "border-slate-200 bg-white hover:border-primary/40 hover:shadow-lg";
+          let isWithinWorkday = false;
+          if (task.startTime && task.endTime) {
+            const startH = new Date(task.startTime).getHours();
+            const startM = new Date(task.startTime).getMinutes();
+            const endH = new Date(task.endTime).getHours();
+            const endM = new Date(task.endTime).getMinutes();
+            
+            const [wsH, wsM] = workdayStart.split(':').map(Number);
+            const [weH, weM] = workdayEnd.split(':').map(Number);
+            
+            const startMins = startH * 60 + startM;
+            const endMins = endH * 60 + endM;
+            const wsMins = wsH * 60 + wsM;
+            const weMins = weH * 60 + weM;
+            
+            const crossesMidnight = endMins <= startMins;
+            isWithinWorkday = startMins >= wsMins && endMins <= weMins && !crossesMidnight;
+          }
+
+          let timePanelColor = "";
+          if (task.startTime && task.endTime) {
+            timePanelColor = isWithinWorkday
+              ? "bg-[#FFF6CC] text-[#B8860B] border-r border-[#FDE68A]/60" // Yellow
+              : "bg-[#F3E8FF] text-[#6B21A8] border-r border-[#E9D5FF]/60"; // Purple
+          } else {
+            timePanelColor = "bg-[#FFF6CC] text-[#B8860B] border-r border-[#FDE68A]/60"; // Yellow
+          }
 
           return (
             <div 
               key={task.id} 
-              onClick={() => setSelectedTask(task)}
-              className="flex flex-row rounded-2xl border border-slate-200/80 bg-white overflow-hidden shadow-sm cursor-pointer transition-all duration-300 ease-in-out hover:-translate-y-[1px] hover:shadow-md hover:border-slate-300 group"
+              className="flex flex-row rounded-2xl border border-slate-200/80 bg-white overflow-hidden shadow-sm transition-all duration-300 ease-in-out hover:-translate-y-[1px] hover:shadow-md hover:border-slate-300 group"
             >
-              {/* LEFT PANEL */}
-              <div className="w-[110px] sm:w-[130px] shrink-0 bg-[#FFF6CC] text-[#B8860B] p-3 sm:p-4 flex flex-col justify-center items-center border-r border-[#FDE68A]/60">
-                <div className="flex flex-col items-center justify-center gap-1.5 text-sm font-bold tracking-tight">
-                  <span className="text-[14px] leading-none">{task.startTime ? new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "--:--"}</span>
-                  <div className="h-4 flex items-center justify-center opacity-50">
-                    <ArrowDown className="w-4 h-4" />
+              {task.startTime && task.endTime ? (
+                <div className={cn("w-[110px] sm:w-[130px] shrink-0 p-3 sm:p-4 flex flex-col justify-center items-center", timePanelColor)}>
+                  <div className="flex flex-col items-center justify-center gap-1.5 text-sm font-bold tracking-tight">
+                    <span className="text-[14px] leading-none">{new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <div className="h-4 flex items-center justify-center opacity-50">
+                      <ArrowDown className="w-4 h-4" />
+                    </div>
+                    <span className="text-[14px] leading-none">{new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                   </div>
-                  <span className="text-[14px] leading-none">{task.endTime ? new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "--:--"}</span>
                 </div>
-              </div>
+              ) : (
+                <div className={cn("w-[110px] sm:w-[130px] shrink-0 p-3 sm:p-4 flex flex-col justify-center items-center", timePanelColor)}>
+                  <div className="flex flex-col items-center justify-center gap-1.5 text-sm font-bold tracking-tight">
+                    <span className="text-xl">📌</span>
+                    <span className="text-[11px] uppercase tracking-wider opacity-80">Unscheduled</span>
+                  </div>
+                </div>
+              )}
 
-              {/* RIGHT PANEL */}
-              <div className="flex-1 p-3 sm:p-4 flex flex-col min-w-0 bg-white justify-center">
-                <div className="flex items-start gap-3">
+              <div className="flex-1 p-3 sm:p-4 flex flex-row items-center justify-between min-w-0 bg-white">
+                <div className="flex items-start gap-3 min-w-0">
                   {isCompleted ? (
-                    <div className="mt-[2px] shrink-0 cursor-pointer" onClick={(e) => handleToggleCompletion(task.id, e as any)}>
+                    <div className="shrink-0 cursor-pointer mt-0.5" onClick={(e) => handleToggleCompletion(task.id, e as any)}>
                       <CheckCircle2 className="h-5 w-5 text-[#22C55E]" />
                     </div>
                   ) : (
                     <button 
                       onClick={(e) => handleToggleCompletion(task.id, e as any)}
-                      className="mt-[2px] text-slate-400 hover:text-primary transition-colors shrink-0"
+                      className="text-slate-400 hover:text-primary transition-colors shrink-0 mt-0.5"
                     >
                       <Circle className="h-5 w-5" />
                     </button>
                   )}
-                  <div className={cn("font-bold text-[18px] leading-snug break-all", isCompleted ? "text-slate-500 line-through opacity-70" : "text-slate-800")}>
-                    {task.title}
-                  </div>
-                </div>
-
-                <div className="pl-8 flex flex-col gap-1.5 mt-1.5">
-                  {/* Row 2: Project */}
-                  {task.project?.name && (
-                    <div className="flex items-center gap-1.5 text-[14.5px] font-medium text-slate-500">
-                      🏢 {task.project.name}
+                  <div className="flex flex-col min-w-0">
+                    <div className={cn("font-bold text-[18px] leading-snug truncate", isCompleted ? "text-slate-500 line-through opacity-70" : "text-slate-800")}>
+                      {task.title}
                     </div>
-                  )}
-
-                  {/* Row 3: Priority Badge + Optional Variants */}
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <span className="bg-[#F8FAFC] text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                       {task.taskType || "GENERAL"}
-                    </span>
-
-                    {task.priority !== "NONE" ? (
-                      <span className={cn(
-                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1",
-                        task.priority === "HIGH" ? "bg-[#FEE2E2] text-[#DC2626]" :
-                        task.priority === "MEDIUM" ? "bg-[#FEF3C7] text-[#D97706]" :
-                        "bg-[#DCFCE7] text-[#16A34A]"
-                      )}>
-                        {task.priority}
-                      </span>
-                    ) : (
-                      <span className="bg-[#F3F4F6] text-[#6B7280] px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                        NONE
-                      </span>
-                    )}
-
-                    {variant === "completed" && task.completedAt && (
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Done {new Date(task.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </div>
-                    )}
-                    {variant === "overdue" && task.endTime && (
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100">
-                        <AlertCircle className="h-3 w-3" />
-                        Late {Math.max(1, Math.floor((Date.now() - new Date(task.endTime).getTime()) / (1000 * 60 * 60 * 24)))}d
-                      </div>
-                    )}
                     
-                    {task.taskType === "DEEP_WORK" && !isCompleted && !isOverdue && task.startTime && task.endTime && (
-                      <Link 
-                        href={`/focus/${task.id}`} 
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-full transition-colors shadow-sm ml-auto"
-                      >
-                        <Play className="h-3 w-3 fill-current" /> Focus
-                      </Link>
+                    {(task.project?.name || task.priority !== "NONE") && (
+                      <div className="flex flex-col gap-0.5 mt-0.5">
+                        {task.project?.name && (
+                          <span className="text-xs font-medium text-slate-400 truncate">
+                            {task.project.name}
+                          </span>
+                        )}
+                        {task.priority !== "NONE" && (
+                          <span className={cn(
+                            "text-[9px] font-bold uppercase tracking-wider w-fit px-1.5 py-0.5 rounded-sm leading-none mt-0.5",
+                            task.priority === "HIGH" ? "bg-red-50 text-red-600" :
+                            task.priority === "MEDIUM" ? "bg-amber-50 text-amber-600" :
+                            "bg-emerald-50 text-emerald-600"
+                          )}>
+                            {task.priority}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
 
-                {/* Recovery Options Bar */}
-                {showRecoveryOptions && (
-                  <div className="mt-3 pt-3 border-t border-red-100 flex flex-wrap items-center gap-2 pl-8" onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setRecoveringTaskId(task.id);
-                        const result = await recoverOverdueTask(task.id, 'MOVE_TOMORROW');
-                        setRecoveringTaskId(null);
-                        if (result.success) {
-                          toast.success("Task moved to tomorrow successfully");
-                          setTasks(prev => prev.filter(t => t.id !== task.id));
-                        } else {
-                          toast.error(result.error);
-                        }
-                      }}
-                      disabled={recoveringTaskId === task.id}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-lg transition-colors"
-                    >
-                      {recoveringTaskId === task.id ? "Moving..." : <><ArrowRight className="h-3.5 w-3.5" /> Tomorrow</>}
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setRecoveringTaskId(task.id);
-                        const result = await recoverOverdueTask(task.id, 'MOVE_NEXT_FREE_SLOT');
-                        setRecoveringTaskId(null);
-                        if (result.success) {
-                          toast.success("Task moved to next free slot successfully");
-                          setTasks(prev => prev.filter(t => t.id !== task.id));
-                        } else {
-                          toast.error(result.error);
-                        }
-                      }}
-                      disabled={recoveringTaskId === task.id}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded-lg transition-colors"
-                    >
-                      {recoveringTaskId === task.id ? "Moving..." : <><Clock className="h-3.5 w-3.5" /> Next Free</>}
-                    </button>
-                    <button
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  {!isCompleted && (
+                    <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        setIgnoredTaskIds(prev => {
-                          const next = new Set(prev);
-                          next.add(task.id);
-                          return next;
-                        });
+                        if (!task.startTime || !task.endTime) {
+                          setFocusTask(task);
+                        } else {
+                          router.push(`/focus/${task.id}`);
+                        }
                       }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 text-xs font-bold rounded-lg transition-colors ml-auto"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-full transition-colors shadow-sm"
                     >
-                      <X className="h-3.5 w-3.5" /> Ignore
+                      <Play className="h-3 w-3 fill-current" /> Focus
                     </button>
-                  </div>
-                )}
+                  )}
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 transition-colors focus:outline-none">
+                      <MoreHorizontal className="h-5 w-5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={() => setSelectedTask(task)}>
+                        <FileText className="h-4 w-4 mr-2" /> View Details
+                      </DropdownMenuItem>
+                      
+                      {!isCompleted && variant !== "unscheduled" && (
+                        <>
+                          {variant !== "overdue" && (
+                            <>
+                              <DropdownMenuItem onClick={() => setSelectedTask(task)}>
+                                <Calendar className="h-4 w-4 mr-2" /> Edit Task
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setSelectedTask(task)}>
+                                <Clock className="h-4 w-4 mr-2" /> Reschedule
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          <DropdownMenuItem onClick={async () => {
+                            setRecoveringTaskId(task.id);
+                            const result = await recoverOverdueTask(task.id, 'MOVE_TOMORROW');
+                            setRecoveringTaskId(null);
+                            if (result.success) {
+                              toast.success("Task moved to tomorrow");
+                              setTasks(prev => prev.filter(t => t.id !== task.id));
+                            } else {
+                              toast.error(result.error);
+                            }
+                          }}>
+                            <ArrowRight className="h-4 w-4 mr-2" /> Move to Tomorrow
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={async () => {
+                            setRecoveringTaskId(task.id);
+                            const result = await recoverOverdueTask(task.id, 'MOVE_NEXT_FREE_SLOT');
+                            setRecoveringTaskId(null);
+                            if (result.success) {
+                              toast.success("Task moved to next free slot");
+                              setTasks(prev => prev.filter(t => t.id !== task.id));
+                            } else {
+                              toast.error(result.error);
+                            }
+                          }}>
+                            <Clock className="h-4 w-4 mr-2" /> Move to Next Free Slot
+                          </DropdownMenuItem>
+                          {variant === "overdue" && (
+                            <DropdownMenuItem onClick={() => {
+                              setIgnoredTaskIds(prev => {
+                                const next = new Set(prev);
+                                next.add(task.id);
+                                return next;
+                              });
+                            }}>
+                              <X className="h-4 w-4 mr-2" /> Ignore
+                            </DropdownMenuItem>
+                          )}
+                        </>
+                      )}
+
+                      {!isCompleted && variant === "unscheduled" && (
+                        <>
+                          <DropdownMenuItem onClick={() => setSelectedTask(task)}>
+                            <Calendar className="h-4 w-4 mr-2" /> Schedule
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={async () => {
+                            setRecoveringTaskId(task.id);
+                            const result = await scheduleUnscheduledTask(task.id);
+                            setRecoveringTaskId(null);
+                            if (result.success) {
+                              toast.success("Task auto-scheduled");
+                              setTasks(prev => prev.filter(t => t.id !== task.id));
+                            } else {
+                              toast.error(result.error);
+                            }
+                          }}>
+                            <Clock className="h-4 w-4 mr-2" /> Move to Next Free Slot
+                          </DropdownMenuItem>
+                        </>
+                      )}
+
+                      {isCompleted && (
+                        <DropdownMenuItem onClick={async () => {
+                          setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: false } : t));
+                          await updateTask(task.id, task.projectId, { isCompleted: false });
+                        }}>
+                          <RotateCcw className="h-4 w-4 mr-2" /> Restore Task
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        className="text-red-600 focus:text-red-600 focus:bg-red-50" 
+                        onClick={async () => {
+                          setTasks(prev => prev.filter(t => t.id !== task.id));
+                          await deleteTask(task.id, task.projectId);
+                          toast.success("Task deleted");
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Delete Task
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
           );
@@ -270,6 +381,26 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
           contactName={activeFollowUpTask.title.replace("Follow up with ", "")} 
         />
       )}
+
+      {focusTask && (
+        <FocusDurationDialog
+          isOpen={!!focusTask}
+          onOpenChange={(open) => !open && setFocusTask(null)}
+          taskTitle={focusTask.title}
+          defaultDuration={focusTask.estimatedDurationMinutes}
+          onStart={(duration) => {
+            router.push(`/focus/${focusTask.id}?duration=${duration}`);
+            setFocusTask(null);
+          }}
+        />
+      )}
+
+      <CompletionReflectionDialog
+        isOpen={!!completingTask}
+        onClose={() => setCompletingTask(null)}
+        onSave={(note) => executeCompletion(note)}
+        onSkip={() => executeCompletion()}
+      />
     </>
   );
 }

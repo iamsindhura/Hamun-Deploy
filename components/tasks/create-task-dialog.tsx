@@ -15,10 +15,11 @@ interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: {
     title: string;
-    startTime: Date;
-    endTime: Date;
+    startTime?: Date;
+    endTime?: Date;
     priority: TaskPriority;
     taskType: TaskType;
+    estimatedDurationMinutes?: number | null;
   }) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -28,6 +29,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
   const [endTime, setEndTime] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("NONE");
   const [taskType, setTaskType] = useState<TaskType>("GENERAL");
+  const [estimatedDurationMinutes, setEstimatedDurationMinutes] = useState<string>("30");
   const [error, setError] = useState("");
   const [conflictError, setConflictError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,21 +66,29 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
     e.preventDefault();
     setError("");
 
-    if (!title.trim() || !startTime || !endTime || !taskType || !priority) {
-      setError("All fields are required.");
+    if (!title.trim() || !taskType || !priority) {
+      setError("Task name, type, and priority are required.");
       return;
     }
 
-    const start = new Date(startTime);
-    const end = new Date(endTime);
+    let start: Date | undefined = undefined;
+    let end: Date | undefined = undefined;
 
-    if (start <= new Date()) {
-      setError("Tasks can only be scheduled in the future.");
-      return;
-    }
+    if (startTime && endTime) {
+      start = new Date(startTime);
+      end = new Date(endTime);
 
-    if (end <= start) {
-      setError("End time must be after start time.");
+      if (start <= new Date()) {
+        setError("Tasks can only be scheduled in the future.");
+        return;
+      }
+
+      if (end <= start) {
+        setError("End time must be after start time.");
+        return;
+      }
+    } else if (startTime || endTime) {
+      setError("Both start and end time must be provided to schedule a task.");
       return;
     }
 
@@ -89,6 +99,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
       endTime: end,
       priority,
       taskType,
+      estimatedDurationMinutes: estimatedDurationMinutes ? parseInt(estimatedDurationMinutes) : null,
     });
     setIsSubmitting(false);
 
@@ -98,6 +109,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
       setEndTime("");
       setPriority("NONE");
       setTaskType("GENERAL");
+      setEstimatedDurationMinutes("30");
       onOpenChange(false);
     } else {
       setError(result.error || "An error occurred.");
@@ -127,23 +139,21 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Start Time</label>
+              <label className="text-sm font-semibold text-slate-700">Start Time (Optional)</label>
               <Input
                 type="datetime-local"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 min={minDateTime}
-                required
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">End Time</label>
+              <label className="text-sm font-semibold text-slate-700">End Time (Optional)</label>
               <Input
                 type="datetime-local"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 min={startTime || minDateTime}
-                required
               />
             </div>
           </div>
@@ -163,6 +173,25 @@ export function CreateTaskDialog({ isOpen, onOpenChange, onSubmit }: CreateTaskD
               </SelectContent>
             </Select>
           </div>
+
+          {!startTime && !endTime && (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Estimated Duration (for auto-scheduling)</label>
+              <Select value={estimatedDurationMinutes} onValueChange={(val) => setEstimatedDurationMinutes(val || "")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent className="z-[200]">
+                  <SelectItem value="15">15m</SelectItem>
+                  <SelectItem value="30">30m</SelectItem>
+                  <SelectItem value="45">45m</SelectItem>
+                  <SelectItem value="60">1h</SelectItem>
+                  <SelectItem value="90">1h 30m</SelectItem>
+                  <SelectItem value="120">2h</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Priority</label>

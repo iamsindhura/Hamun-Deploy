@@ -10,6 +10,13 @@ export default async function UpcomingTasksPage() {
     redirect("/login");
   }
 
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { workdayStart: true, workdayEnd: true }
+  });
+  const workdayStart = dbUser?.workdayStart || "09:00";
+  const workdayEnd = dbUser?.workdayEnd || "18:00";
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const nextWeek = new Date(today);
@@ -19,28 +26,11 @@ export default async function UpcomingTasksPage() {
     where: {
       userId: session.user.id,
       isCompleted: false,
-      OR: [
-        { endTime: { gte: new Date() } },
-        { endTime: null }
-      ],
-      AND: [
-        {
-          OR: [
-            {
-              startTime: {
-                gte: today,
-                lt: nextWeek,
-              }
-            },
-            {
-              dueDate: {
-                gte: today,
-                lt: nextWeek,
-              }
-            }
-          ]
-        }
-      ]
+      startTime: {
+        gte: today,
+        lt: nextWeek,
+      },
+      endTime: { not: null }
     },
     include: {
       project: true,
@@ -48,6 +38,19 @@ export default async function UpcomingTasksPage() {
     orderBy: [
       { startTime: "asc" }
     ],
+  });
+
+  const unscheduledTasks = await prisma.task.findMany({
+    where: {
+      userId: session.user.id,
+      isCompleted: false,
+      startTime: null,
+      endTime: null,
+    },
+    include: {
+      project: true,
+    },
+    orderBy: { createdAt: "asc" },
   });
 
   const groupedTasks = tasks.reduce((acc: Record<string, typeof tasks>, task) => {
@@ -67,12 +70,22 @@ export default async function UpcomingTasksPage() {
         {Object.entries(groupedTasks).map(([dateStr, dateTasks]) => (
           <div key={dateStr} className="space-y-3">
             <h2 className="font-bold text-slate-800 text-lg border-b pb-2">{dateStr}</h2>
-            <TaskListView tasks={dateTasks} />
+            <TaskListView tasks={dateTasks} workdayStart={workdayStart} workdayEnd={workdayEnd} />
           </div>
         ))}
-        {tasks.length === 0 && (
+        {tasks.length === 0 && unscheduledTasks.length === 0 && (
           <div className="text-center text-muted-foreground mt-10">
             No upcoming tasks found.
+          </div>
+        )}
+
+        {unscheduledTasks.length > 0 && (
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-4 px-1">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">📌 Unscheduled Tasks</h2>
+              <div className="h-px flex-1 bg-slate-200"></div>
+            </div>
+            <TaskListView tasks={unscheduledTasks} variant="unscheduled" workdayStart={workdayStart} workdayEnd={workdayEnd} />
           </div>
         )}
       </div>

@@ -10,6 +10,13 @@ export default async function CompletedTasksPage() {
     redirect("/login");
   }
 
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { workdayStart: true, workdayEnd: true }
+  });
+  const workdayStart = dbUser?.workdayStart || "09:00";
+  const workdayEnd = dbUser?.workdayEnd || "18:00";
+
   const tasks = await prisma.task.findMany({
     where: {
       userId: session.user.id,
@@ -26,8 +33,8 @@ export default async function CompletedTasksPage() {
       <div className="flex h-14 items-center border-b px-6">
         <h1 className="text-lg font-semibold">Completed</h1>
       </div>
-      <div className="flex-1 overflow-y-auto p-6">
-        <TaskListView tasks={tasks} variant="completed" showDate={true} />
+      <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full">
+        <TaskListView tasks={tasks} variant="completed" showDate={true} workdayStart={workdayStart} workdayEnd={workdayEnd} />
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { TaskDetailSheet } from "./task-detail-sheet";
 import { updateTask, createTask, createColumn, deleteColumn, updateColumn } from "@/app/actions/tasks";
 import { createActivity } from "@/app/actions/activities";
 import { FollowUpDialog } from "@/components/tasks/follow-up-dialog";
+import { CompletionReflectionDialog } from "./completion-reflection-dialog";
 import { useTaskReminders } from "@/components/providers/task-reminder-provider";
 import { Plus, Calendar, Flag, CheckCircle2, Circle, GripVertical, MoreHorizontal, Trash2, Edit2, ChevronDown, ChevronRight, ChevronLeft, Maximize2, X, ListTodo, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -252,6 +253,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [completingTask, setCompletingTask] = useState<any | null>(null);
 
   const [activeColumn, setActiveColumn] = useState<TaskColumn | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -301,7 +303,7 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const handleAddTask = async (data: { title: string; startTime: Date; endTime: Date; priority: TaskPriority; taskType: any }, columnId: string) => {
+  const handleAddTask = async (data: { title: string; startTime?: Date; endTime?: Date; priority: TaskPriority; taskType: any; estimatedDurationMinutes?: number | null }, columnId: string) => {
     const tempId = `temp-${Date.now()}`;
     const newTask: Task = {
       id: tempId,
@@ -313,8 +315,9 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
       reminderAt: null,
       priority: data.priority,
       taskType: data.taskType,
-      startTime: data.startTime,
-      endTime: data.endTime,
+      startTime: data.startTime || null,
+      endTime: data.endTime || null,
+      estimatedDurationMinutes: data.estimatedDurationMinutes || null,
       isPinned: false,
       position: tasks.filter(t => t.columnId === columnId).length,
       projectId,
@@ -375,17 +378,59 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
   };
 
   const toggleTaskCompletion = async (taskId: string, isCompleted: boolean) => {
-    const isCompleting = !isCompleted;
     const taskToToggle = tasks.find(t => t.id === taskId);
+    if (!taskToToggle) return;
 
-    if (isCompleting && projectName === "Follow Ups" && taskToToggle?.contactId) {
-      setActiveFollowUpTask(taskToToggle);
-      setShowFollowUpDialog(true);
-      return;
+    if (isCompleted) {
+      // Uncompleting - do immediately
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: false } : t));
+      await updateTask(taskId, projectId, { isCompleted: false });
+    } else {
+      if (projectName === "Follow Ups" && taskToToggle.contactId) {
+        setActiveFollowUpTask(taskToToggle);
+        setShowFollowUpDialog(true);
+        return;
+      }
+      // Completing - open reflection dialog
+      setCompletingTask(taskToToggle);
+    }
+  };
+
+  const executeCompletion = async (note?: string) => {
+    if (!completingTask) return;
+    
+    const taskId = completingTask.id;
+    const task = completingTask;
+    setCompletingTask(null);
+
+    let newDescription = task.description || "";
+    if (note) {
+      const dateObj = new Date();
+      const datePart = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const timePart = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const timestamp = `${datePart} • ${timePart}`;
+      
+      const noteBlock = `${timestamp}\n${note}`;
+      
+      if (!newDescription.includes("Completion History")) {
+        newDescription = newDescription.trim() + (newDescription.trim() ? "\n\n" : "") + "Completion History\n\n" + noteBlock;
+      } else {
+        newDescription = newDescription.trim() + "\n\n" + noteBlock;
+      }
     }
 
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: isCompleting } : t));
-    await updateTask(taskId, projectId, { isCompleted: isCompleting });
+    setTasks(prev => prev.map(t => t.id === taskId ? { 
+      ...t, 
+      isCompleted: true,
+      description: newDescription,
+      completedAt: new Date()
+    } : t));
+
+    await updateTask(taskId, projectId, { 
+      isCompleted: true,
+      description: newDescription,
+      completedAt: new Date()
+    });
   };
 
   const handleFollowUpMethod = async (method: "CALL" | "EMAIL" | "MEETING" | "NONE", notes?: string) => {
@@ -616,8 +661,8 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
             )}
           </DragOverlay>
 
-          <TaskDetailSheet
-            task={selectedTask}
+          <TaskDetailSheet 
+            task={selectedTask} 
             projectId={projectId}
             onClose={() => setSelectedTask(null)}
             onUpdate={(updatedTask) => setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t))}
@@ -625,6 +670,13 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
           />
         </DndContext>
       </div>
+
+      <CompletionReflectionDialog
+        isOpen={!!completingTask}
+        onClose={() => setCompletingTask(null)}
+        onSave={(note) => executeCompletion(note)}
+        onSkip={() => executeCompletion()}
+      />
 
       {/* Focus Mode Overlay */}
       {isFocusMode && columns.length > 0 && (
@@ -799,6 +851,13 @@ export function KanbanBoard({ projectId, projectName, initialColumns, initialTas
           contactName={activeFollowUpTask.title.replace("Follow up with ", "")}
         />
       )}
+
+      <CompletionReflectionDialog
+        isOpen={!!completingTask}
+        onClose={() => setCompletingTask(null)}
+        onSave={(note) => executeCompletion(note)}
+        onSkip={() => executeCompletion()}
+      />
     </div>
   );
 }

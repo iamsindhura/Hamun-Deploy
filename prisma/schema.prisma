@@ -168,6 +168,7 @@ model Task {
   startTime     DateTime?
   taskType      TaskType       @default(GENERAL)
   completedAt   DateTime?
+  estimatedDurationMinutes Int?
   focusSessions FocusSession[]
   subtasks      Subtask[]
   column        TaskColumn?    @relation(fields: [columnId], references: [id])

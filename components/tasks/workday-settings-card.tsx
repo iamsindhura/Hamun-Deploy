@@ -50,16 +50,20 @@ export function WorkdaySettingsCard({ initialStart, initialEnd }: WorkdaySetting
   return (
     <>
       <div 
-        className="bg-indigo-50/50 rounded-2xl border border-indigo-100 p-6 shadow-sm flex flex-col justify-center min-h-[120px] group relative cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 transition-colors"
         onClick={() => setIsOpen(true)}
+        className="rounded-xl border bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-l-[4px] border-l-slate-800 flex flex-col justify-between gap-2 min-h-[90px] cursor-pointer hover:bg-slate-50 transition-colors group relative"
       >
         <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Edit2 className="h-4 w-4 text-indigo-400" />
+          <Edit2 className="h-4 w-4 text-slate-400" />
         </div>
-        <div className="text-xs font-semibold text-indigo-600/80 uppercase tracking-wider mb-2">Workday</div>
-        <div className="text-xl font-bold text-indigo-900 leading-tight">
-          {formatTime(initialStart)} <br />
-          <span className="text-indigo-600/60 text-lg">to</span> {formatTime(initialEnd)}
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Workday</span>
+        <div className="flex flex-col mt-1">
+          <span className="text-xl font-black text-slate-800 leading-none">
+            {formatTime(initialStart)}
+          </span>
+          <span className="text-sm font-bold text-slate-400 mt-1">
+            to {formatTime(initialEnd)}
+          </span>
         </div>
       </div>
 

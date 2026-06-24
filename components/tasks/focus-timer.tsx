@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Play, Pause, Square, CheckCircle2, ArrowLeft } from "lucide-react";
 import { createFocusSession } from "@/app/actions/focus";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ export function FocusTimer({
   }
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   const [isRunning, setIsRunning] = useState(false);
   const [actualSeconds, setActualSeconds] = useState(0);
@@ -29,9 +30,20 @@ export function FocusTimer({
   const [hasStarted, setHasStarted] = useState(false);
   
   // Calculate total scheduled duration
-  const start = new Date(task.startTime).getTime();
-  const end = new Date(task.endTime).getTime();
-  const totalDurationSeconds = Math.max(0, Math.floor((end - start) / 1000));
+  let totalDurationSeconds = 0;
+  const queryDuration = searchParams.get('duration');
+  
+  if (queryDuration && !isNaN(parseInt(queryDuration, 10))) {
+    totalDurationSeconds = parseInt(queryDuration, 10) * 60;
+  } else if (task.startTime && task.endTime) {
+    const start = new Date(task.startTime).getTime();
+    const end = new Date(task.endTime).getTime();
+    totalDurationSeconds = Math.max(0, Math.floor((end - start) / 1000));
+  } else if (task.estimatedDurationMinutes) {
+    totalDurationSeconds = task.estimatedDurationMinutes * 60;
+  } else {
+    totalDurationSeconds = 30 * 60; // fallback to 30 mins
+  }
   
   // Time remaining on the visual countdown
   const timeRemaining = Math.max(0, totalDurationSeconds - actualSeconds);
@@ -56,6 +68,21 @@ export function FocusTimer({
   const hasPlayedWarningRef = useRef(false);
   const hasPlayedCompleteRef = useRef(false);
 
+  // Ask for notification permission on mount
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const fireNotification = (title: string, body: string) => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body });
+    } else {
+      console.warn("Notification fallback: Permission denied or unavailable.", title, body);
+    }
+  };
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isRunning && timeRemaining > 0) {
@@ -73,6 +100,8 @@ export function FocusTimer({
       if (lastCheckpointRef.current !== actualSeconds) {
         lastCheckpointRef.current = actualSeconds;
         playAudioCue('checkpoint', vol);
+        console.log("15 minute checkpoint notification");
+        fireNotification("Focus Checkpoint", "You are doing great! Keep going.");
       }
     }
 
@@ -80,6 +109,8 @@ export function FocusTimer({
       if (!hasPlayedWarningRef.current) {
         hasPlayedWarningRef.current = true;
         playAudioCue('warning', vol);
+        console.log("5 minute warning notification");
+        fireNotification("5 Minutes Remaining", "Finish up your current thought.");
       }
     }
 
@@ -88,6 +119,8 @@ export function FocusTimer({
         hasPlayedCompleteRef.current = true;
         playAudioCue('complete', vol);
         setIsRunning(false);
+        console.log("Focus session completed notification");
+        fireNotification("Focus Session Completed", "Great job! Time for a break.");
       }
     }
   }, [actualSeconds, timeRemaining, isRunning, cuesEnabled, checkpointsEnabled, warningEnabled, vol, checkpointIntervalSeconds]);
@@ -96,6 +129,8 @@ export function FocusTimer({
     if (!hasStarted && cuesEnabled && !isRunning) {
       setHasStarted(true);
       playAudioCue('start', vol);
+      console.log("Focus session started notification");
+      fireNotification("Focus Session Started", `Time to focus on: ${task.title}`);
     }
     setIsRunning(!isRunning);
   };
@@ -110,7 +145,7 @@ export function FocusTimer({
     const result = await createFocusSession(task.id, actualSeconds);
     if (result.success) {
       toast.success("Focus session saved successfully");
-      router.push("/deep-work");
+      router.back();
     } else {
       toast.error(result.error);
       setIsCompleting(false);
@@ -140,7 +175,7 @@ export function FocusTimer({
       </div>
 
       <button 
-        onClick={() => router.push("/deep-work")}
+        onClick={() => router.back()}
         className="absolute top-8 left-8 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
       >
         <ArrowLeft className="h-5 w-5" />
@@ -189,6 +224,25 @@ export function FocusTimer({
             {isCompleting ? "Saving..." : "Complete Session"}
           </button>
         </div>
+
+        {process.env.NODE_ENV === "development" && (
+          <button 
+            onClick={() => {
+              if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("Hamun Test", { body: "Notifications are working correctly" });
+              } else if ("Notification" in window && Notification.permission === "default") {
+                Notification.requestPermission().then(p => {
+                  if (p === "granted") new Notification("Hamun Test", { body: "Notifications are working correctly" });
+                });
+              } else {
+                alert("Notifications are denied or not supported by your browser.");
+              }
+            }}
+            className="mt-12 px-6 py-2.5 bg-slate-800/50 text-slate-400 border border-slate-700 rounded-full text-sm font-medium hover:bg-slate-800 hover:text-slate-300 transition-colors"
+          >
+            Test Notification
+          </button>
+        )}
         
         <div className="mt-12 text-slate-500 font-medium tracking-wide">
           Actual Focus Time: <span className="text-slate-300">{formatTime(actualSeconds)}</span>

@@ -10,7 +10,7 @@ interface QuickAddTaskProps {
   columnId?: string;
   projectId: string;
   className?: string;
-  onAdd: (data: { title: string; startTime: Date; endTime: Date; priority: TaskPriority; taskType: TaskType }) => Promise<{ success: boolean; error?: string }>;
+  onAdd: (data: { title: string; startTime?: Date; endTime?: Date; priority: TaskPriority; taskType: TaskType; estimatedDurationMinutes?: number | null }) => Promise<{ success: boolean; error?: string }>;
 }
 
 export function QuickAddTask({ columnId, projectId, className, onAdd }: QuickAddTaskProps) {
