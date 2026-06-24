@@ -215,25 +215,24 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  {task.title}
  </div>
  
- {(task.project?.name || task.priority !== "NONE") && (
- <div className="flex flex-col gap-0.5 mt-0.5">
+ <div className="flex flex-col gap-1 mt-2">
  {task.project?.name && (
- <span className="text-xs font-semibold text-muted-foreground truncate bg-muted px-2 py-0.5 rounded-md border border-border w-fit">
- {task.project.name}
+ <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full w-fit">
+ <span>📁</span> {task.project.name}
  </span>
  )}
- {task.priority !== "NONE" && (
+ {task.priority && (
  <span className={cn(
- "text-[9px] font-bold uppercase tracking-wider w-fit px-1.5 py-0.5 rounded-sm leading-none mt-0.5 border",
- task.priority === "HIGH" ? "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20" :
- task.priority === "MEDIUM" ? "bg-[#FACC15]/10 text-[#FACC15] border-[#FACC15]/20" :
- "bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20"
+ "text-[9px] font-bold uppercase tracking-wider w-fit px-2 py-0.5 rounded-full leading-none",
+ task.priority === "HIGH" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+ task.priority === "MEDIUM" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+ task.priority === "LOW" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+ "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
  )}>
- {task.priority}
+ {task.priority === "NONE" ? "NONE" : task.priority}
  </span>
  )}
  </div>
- )}
  </div>
  </div>
 
