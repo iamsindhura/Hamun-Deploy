@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AudioSettingsCard } from "@/components/deep-work/audio-settings-card";
+import { MonthlyFocusHeatmap } from "@/components/deep-work/monthly-focus-heatmap";
 import { Play, TrendingUp, Target, Clock, Calendar as CalendarIcon, Trophy, Activity, CheckCircle2 } from "lucide-react";
 
 function formatDuration(totalMs: number) {
@@ -137,39 +138,6 @@ export default async function DeepWorkPage() {
  let completionPercentage = Math.round((totalWeeklyCompletedMs / weeklyTargetMs) * 100);
  if (completionPercentage > 100) completionPercentage = 100;
 
- // Heatmap generation
- const heatmapDays = 140; // ~20 weeks
- const heatmapData = [];
- const heatmapStart = new Date(today);
- heatmapStart.setDate(today.getDate() - heatmapDays + 1);
- 
- for (let i = 0; i < heatmapDays; i++) {
- const d = new Date(heatmapStart);
- d.setDate(heatmapStart.getDate() + i);
- const dStr = getLocalDayString(d);
- heatmapData.push({
- date: dStr,
- ms: sessionDailyMs[dStr] || 0
- });
- }
-
- const weeks = [];
- let currentWeek = [];
- // pad first week
- const emptyDays = heatmapStart.getDay() === 0 ? 6 : heatmapStart.getDay() - 1; // assuming Monday start
- for(let i=0; i<emptyDays; i++) currentWeek.push(null);
-
- for (const day of heatmapData) {
- currentWeek.push(day);
- if (currentWeek.length === 7) {
- weeks.push(currentWeek);
- currentWeek = [];
- }
- }
- if (currentWeek.length > 0) {
- while(currentWeek.length < 7) currentWeek.push(null);
- weeks.push(currentWeek);
- }
 
  const topProjects = Object.values(projectFocusTime)
  .sort((a, b) => b.ms - a.ms)
@@ -242,51 +210,8 @@ export default async function DeepWorkPage() {
  
  <div className="lg:col-span-2 space-y-6">
  
- {/* Heatmap Section */}
- <div className="bg-card rounded-2xl border border-border p-8 shadow-sm hover:border-[#8B5CF6]/30 transition-colors">
- <div className="flex items-center justify-between mb-8">
- <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2.5">
- <CalendarIcon className="w-4 h-4 text-[#8B5CF6]" /> Focus Heatmap
- </h2>
- </div>
- <div className="flex gap-1.5 overflow-x-auto pb-2 no-scrollbar">
- {weeks.map((week, i) => (
- <div key={i} className="flex flex-col gap-1.5">
- {week.map((day, j) => {
- if (!day) return <div key={j} className="w-3.5 h-3.5 rounded-sm bg-transparent" />;
- 
- if (day.ms > 0) {
- const hours = day.ms / (1000 * 60 * 60);
- if (hours >= 4) return (
- <div key={j} title={`${day.date}: ${formatDuration(day.ms)}`} className="w-3.5 h-3.5 rounded-sm transition-all hover:ring-2 hover:ring-[#8B5CF6] hover:scale-110 cursor-help bg-[#8B5CF6] shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
- );
- else if (hours >= 2) return (
- <div key={j} title={`${day.date}: ${formatDuration(day.ms)}`} className="w-3.5 h-3.5 rounded-sm transition-all hover:ring-2 hover:ring-[#8B5CF6] hover:scale-110 cursor-help bg-[#6D5BD0]" />
- );
- else if (hours >= 1) return (
- <div key={j} title={`${day.date}: ${formatDuration(day.ms)}`} className="w-3.5 h-3.5 rounded-sm transition-all hover:ring-2 hover:ring-[#8B5CF6] hover:scale-110 cursor-help bg-[#4F46E5]" />
- );
- else return (
- <div key={j} title={`${day.date}: ${formatDuration(day.ms)}`} className="w-3.5 h-3.5 rounded-sm transition-all hover:ring-2 hover:ring-[#8B5CF6] hover:scale-110 cursor-help bg-[#2A3246]" />
- );
- }
- return <div key={j} title={`${day.date}: 0h 0m`} className="w-3.5 h-3.5 rounded-sm transition-all hover:ring-2 hover:ring-[#8B5CF6] hover:scale-110 cursor-help bg-border" />
- })}
- </div>
- ))}
- </div>
- <div className="mt-6 flex items-center justify-end gap-2 text-xs font-medium text-muted-foreground">
- <span>Less</span>
- <div className="flex gap-1.5">
- <div className="w-3 h-3 rounded-sm bg-border" />
- <div className="w-3 h-3 rounded-sm bg-[#2A3246]" />
- <div className="w-3 h-3 rounded-sm bg-[#4F46E5]" />
- <div className="w-3 h-3 rounded-sm bg-[#6D5BD0]" />
- <div className="w-3 h-3 rounded-sm bg-[#8B5CF6] shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
- </div>
- <span>More</span>
- </div>
- </div>
+          {/* Heatmap Section */}
+          <MonthlyFocusHeatmap focusSessions={focusSessions} />
 
  {/* Recent Sessions */}
  <div className="bg-card rounded-2xl border border-border p-8 shadow-sm hover:border-[#8B5CF6]/30 transition-colors">

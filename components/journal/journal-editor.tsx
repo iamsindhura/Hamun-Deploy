@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { generateJournal, saveJournal } from "@/app/actions/journal";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, Save, Edit2, CheckCircle2 } from "lucide-react";
+import { Loader2, Sparkles, Save, Edit2, CheckCircle2, CalendarDays, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { TiptapEditor } from "./editor/TiptapEditor";
+import { parseJournalContent } from "@/lib/tiptap-utils";
 
 const MOODS = [
   { emoji: "😊", label: "Amazing", value: "Amazing" },
@@ -15,18 +17,45 @@ const MOODS = [
   { emoji: "😢", label: "Bad", value: "Bad" }
 ];
 
-export function JournalEditor({ journal: initialJournal }: { journal: any }) {
+interface JournalEditorProps {
+  journal: any;
+  isHistorical?: boolean;
+}
+
+export function JournalEditor({ journal: initialJournal, isHistorical = false }: JournalEditorProps) {
   const [journal, setJournal] = useState(initialJournal);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [editedText, setEditedText] = useState("");
+  const [content, setContent] = useState("");
   const [selectedMood, setSelectedMood] = useState("Good");
+
+  // Read-only mode by default for historical journals
+  useEffect(() => {
+    if (isHistorical) {
+      setIsEditing(false);
+    }
+  }, [isHistorical]);
 
   useEffect(() => {
     setJournal(initialJournal);
     if (initialJournal) {
-      setEditedText(initialJournal.editedText || initialJournal.originalText);
+      const parsed = parseJournalContent(initialJournal.content || initialJournal.originalText);
+      setContent(JSON.stringify(parsed));
+      
+      // Auto-migrate if it was empty or legacy plain text and we successfully converted it
+      // but we ONLY auto-migrate if we have an ID and it hasn't been saved as content yet.
+      // (Optional requirement #7 from user)
+      if (!initialJournal.content && initialJournal.originalText && initialJournal.id) {
+        saveJournal(initialJournal.date, parsed, {
+          quote: initialJournal.quote,
+          sticker: initialJournal.sticker,
+          tags: initialJournal.tags,
+          productivityScore: initialJournal.productivityScore,
+          focusStreak: initialJournal.focusStreak,
+          insights: initialJournal.insights
+        }).catch(console.error);
+      }
     }
   }, [initialJournal]);
 
@@ -34,13 +63,16 @@ export function JournalEditor({ journal: initialJournal }: { journal: any }) {
     try {
       setIsGenerating(true);
       const res = await generateJournal(selectedMood);
-      if (res.success) {
+      if (res.success && res.journal) {
         setJournal(res.journal);
-        setEditedText(res.journal.originalText);
+        const parsed = parseJournalContent(res.journal.content || res.journal.originalText);
+        setContent(JSON.stringify(parsed));
         toast.success("Journal generated successfully!");
+      } else {
+        toast.error(res.error || "Failed to generate journal");
       }
-    } catch (e) {
-      toast.error("Failed to generate journal");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to generate journal");
     } finally {
       setIsGenerating(false);
     }
@@ -50,8 +82,16 @@ export function JournalEditor({ journal: initialJournal }: { journal: any }) {
     if (!journal) return;
     try {
       setIsSaving(true);
-      const res = await saveJournal(journal.id, editedText);
-      if (res.success) {
+      const parsedContent = content ? JSON.parse(content) : null;
+      const res = await saveJournal(journal.date, parsedContent, {
+        quote: journal.quote,
+        sticker: journal.sticker,
+        tags: journal.tags,
+        productivityScore: journal.productivityScore,
+        focusStreak: journal.focusStreak,
+        insights: journal.insights
+      });
+      if (res.success && res.journal) {
         setJournal(res.journal);
         setIsEditing(false);
         toast.success("Journal saved successfully!");
@@ -109,52 +149,154 @@ export function JournalEditor({ journal: initialJournal }: { journal: any }) {
 
   return (
     <div className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden flex flex-col">
-      <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-purple-500" />
-          <span className="font-bold text-sm tracking-wide uppercase text-foreground">Today's Reflection</span>
+      {/* Toolbar Layer */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 sm:p-8 shrink-0 gap-4 border-b border-border bg-card/50">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-sm font-medium">
+            <span>{isHistorical ? initialJournal?.sticker || "Past Memory" : "Today's Emotion:"}</span>
+            {!isHistorical && (
+              <select 
+                value={selectedMood}
+                onChange={(e) => setSelectedMood(e.target.value)}
+                className="bg-transparent border-none focus:ring-0 cursor-pointer p-0 pr-6 text-foreground font-semibold"
+                disabled={isEditing}
+              >
+                {MOODS.map(m => <option key={m.value} value={m.value}>{m.emoji} {m.label}</option>)}
+              </select>
+            )}
+          </div>
+          {isHistorical && (
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              {new Date(initialJournal.date).toLocaleDateString()}
+            </div>
+          )}
         </div>
-        <div className="flex gap-2">
-          {!isEditing ? (
+
+        <div className="flex items-center gap-3">
+          {/* Historical Viewing Toolbar */}
+          {isHistorical && !isEditing && (
             <>
-              <Button variant="outline" size="sm" onClick={handleGenerate} className="text-xs">
-                <Sparkles className="h-3 w-3 mr-2" /> Regenerate
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit Journal
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} className="text-xs">
-                <Edit2 className="h-3 w-3 mr-2" /> Edit
+              <Button variant="ghost" size="sm">
+                <Share2 className="w-4 h-4 mr-2" />
+                Share
               </Button>
             </>
-          ) : (
+          )}
+
+          {/* Active Editing Toolbar (Today or Historical) */}
+          {isEditing && (
             <>
               <Button variant="ghost" size="sm" onClick={() => {
                 setIsEditing(false);
-                setEditedText(journal.editedText || journal.originalText);
+                const parsed = parseJournalContent(journal?.content || journal?.originalText);
+                setContent(JSON.stringify(parsed));
               }} className="text-xs">
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleSave} disabled={isSaving} className="text-xs bg-purple-600 hover:bg-purple-700 text-white">
-                {isSaving ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : <Save className="h-3 w-3 mr-2" />}
+              <Button 
+                onClick={handleSave} 
+                disabled={isSaving}
+                className="shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 Save Changes
+              </Button>
+            </>
+          )}
+
+          {/* Today's Reading Toolbar */}
+          {!isHistorical && !isEditing && journal && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} className="bg-background">
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button 
+                onClick={handleGenerate} 
+                disabled={isGenerating}
+                variant="default"
+                className="shadow-sm"
+              >
+                {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                Regenerate
               </Button>
             </>
           )}
         </div>
       </div>
 
-      <div className="p-6 sm:p-8">
+      <div className="p-8 sm:p-12 flex-1 flex flex-col min-h-[70vh]">
         {isEditing ? (
-          <textarea
-            value={editedText}
-            onChange={(e) => setEditedText(e.target.value)}
-            className="w-full min-h-[400px] p-4 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-base leading-relaxed text-foreground resize-y"
+          <TiptapEditor 
+            initialContent={parseJournalContent(content)} 
+            onUpdate={(json) => setContent(JSON.stringify(json))}
+            editable={true}
           />
         ) : (
           <div className="prose prose-slate dark:prose-invert max-w-none space-y-6">
-            {(journal.editedText || journal.originalText).split('\n\n').map((paragraph: string, i: number) => (
-              <p key={i} className="text-[17px] leading-relaxed text-foreground/90 font-medium">
-                {paragraph}
-              </p>
-            ))}
+            <TiptapEditor 
+              initialContent={parseJournalContent(content)} 
+              onUpdate={() => {}}
+              editable={false}
+            />
+          </div>
+        )}
+
+        {/* Decorative Elements Section (Rendered below journal text) */}
+        {!isEditing && journal && (
+          <div className="mt-16 space-y-12 border-t border-border/50 pt-12">
+            {/* Gallery placeholder */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">Moments & Vibes</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="aspect-square bg-muted/30 rounded-xl border border-border/50 flex items-center justify-center text-muted-foreground/50 text-xs">
+                  Photo Space
+                </div>
+                <div className="aspect-square bg-muted/30 rounded-xl border border-border/50 flex items-center justify-center text-muted-foreground/50 text-xs">
+                  Photo Space
+                </div>
+              </div>
+            </div>
+
+            {/* Content Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="p-6 bg-purple-500/5 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-900/30 rounded-2xl flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-3">Daily Insight</h4>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    {journal.insights?.[0] || "Every day is an opportunity to learn something new about yourself and your process."}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="p-6 bg-blue-500/5 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-900/30 rounded-2xl flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-3">Tomorrow's Intention</h4>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    "Maintain the momentum and approach challenges with a clear, focused mind."
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-900/30 rounded-2xl flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-3">Gratitude</h4>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    "Grateful for the progress made today and the clarity that comes from deep, uninterrupted focus."
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Favorite Quote */}
+            <div className="p-8 text-center italic text-muted-foreground border-y border-border/30">
+              "{journal.quote || "The future depends on what you do today."}"
+            </div>
           </div>
         )}
       </div>

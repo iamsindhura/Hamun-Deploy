@@ -25,11 +25,11 @@ model User {
   accounts                Account[]
   contacts                Contact[]
   focusSessions           FocusSession[]
+  journals                Journal[]
   projects                Project[]
   pushSubs                PushSubscription[]
   sessions                Session[]
   tasks                   Task[]
-  journals                Journal[]
 }
 
 model Account {
@@ -212,6 +212,53 @@ model FocusSession {
   @@index([taskId])
 }
 
+model Journal {
+  id                String           @id @default(cuid())
+  userId            String
+  date              DateTime
+  originalText      String
+  quote             String
+  productivityScore Int
+  focusStreak       Int
+  sticker           String
+  insights          Json
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  content           Json?
+  isFavorite        Boolean          @default(false)
+  isPinned          Boolean          @default(false)
+  tags              String[]
+  attachments       Attachment[]
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions          JournalVersion[]
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model JournalVersion {
+  id            String   @id @default(cuid())
+  journalId     String
+  versionNumber Int
+  snapshot      Json
+  createdBy     String
+  createdAt     DateTime @default(now())
+  journal       Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+
+  @@index([journalId])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  journalId String
+  url       String
+  type      String
+  createdAt DateTime @default(now())
+  journal   Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+
+  @@index([journalId])
+}
+
 enum Stage {
   LEAD
   POTENTIAL
@@ -247,23 +294,4 @@ enum TaskType {
   MEETING
   DEEP_WORK
   HABIT
-}
-
-model Journal {
-  id                String   @id @default(cuid())
-  userId            String
-  date              DateTime
-  originalText      String
-  editedText        String?
-  quote             String
-  productivityScore Int
-  focusStreak       Int
-  sticker           String
-  insights          Json
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, date])
-  @@index([userId, date])
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import {
@@ -207,6 +207,7 @@ function SortableProjectItem({
 
 export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?: any[], isOpen?: boolean, onClose?: () => void }) {
     const pathname = usePathname();
+    const router = useRouter();
 
     const [activeTab, setActiveTab] = useState<"crm" | "tasks">("crm");
     const [localProjects, setLocalProjects] = useState<any[]>(projects);
@@ -358,9 +359,9 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
                 )}
             >
                 <div className="p-6 pb-4 flex items-center justify-between">
-                    <Link href="/" className="flex items-center gap-2" onClick={onClose}>
-                        <img src="/logo-icon.png" alt="Hamun Logo" className="h-20 w-20 object-contain rounded-xl shadow-sm" />
-                        <span className="text-xl font-bold tracking-tight">Hamun</span>
+                    <Link href="/" className="flex items-center gap-1 shrink-0" onClick={onClose}>
+                        <img src="/logo/hamun-logo.png?v=2" alt="Hamun Logo" className="h-[110px] w-[110px] object-contain overflow-visible shrink-0 -ml-4" />
+                        <span className="text-3xl font-extrabold tracking-tight shrink-0 -ml-3 mt-1">Hamun</span>
                     </Link>
 
                     {onClose && (
@@ -377,13 +378,21 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
                     <div className="flex p-1 bg-sidebar-accent/50 rounded-lg">
                         <button
                             className={cn("flex-1 flex items-center justify-center gap-2 py-1.5 text-xs rounded-md transition-all", activeTab === "crm" && pathname !== "/journal" && pathname !== "/deep-work" ? "text-white font-semibold" : "text-sidebar-foreground/60 hover:text-sidebar-foreground font-semibold")}
-                            onClick={() => setActiveTab("crm")}
+                            onClick={() => {
+                                setActiveTab("crm");
+                                router.push("/");
+                                if (onClose) onClose();
+                            }}
                         >
                             <LayoutDashboard className="h-3.5 w-3.5" /> CRM
                         </button>
                         <button
                             className={cn("flex-1 flex items-center justify-center gap-2 py-1.5 text-xs rounded-md transition-all", activeTab === "tasks" && pathname !== "/journal" && pathname !== "/deep-work" ? "text-white font-semibold" : "text-sidebar-foreground/60 hover:text-sidebar-foreground font-semibold")}
-                            onClick={() => setActiveTab("tasks")}
+                            onClick={() => {
+                                setActiveTab("tasks");
+                                router.push("/tasks/today");
+                                if (onClose) onClose();
+                            }}
                         >
                             <ListTodo className="h-3.5 w-3.5" /> Tasks
                         </button>
@@ -490,17 +499,21 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
                     )}
                 </div>
 
-                <div className="border-t border-sidebar-border p-4 mt-auto space-y-2">
-                    <div className="flex items-center justify-between text-sidebar-foreground/70 px-2 py-1.5">
-                        <span className="text-sm font-medium">Theme</span>
-                        <ThemeToggle />
+                <div className="border-t border-sidebar-border px-2 py-1.5 mt-auto">
+                    <div className="flex items-center justify-between text-sidebar-foreground/70 px-2 py-0.5 mb-1">
+                        <span className="text-[12px] font-medium">Theme</span>
+                        <div className="scale-[0.8] origin-right">
+                            <ThemeToggle />
+                        </div>
                     </div>
                     <Button
                         variant="ghost"
-                        className="w-full justify-start text-sidebar-foreground/70 hover:text-red-400 hover:bg-red-400/10 transition-all"
-                        onClick={() => signOut()}
+                        className="w-full justify-start h-7 px-2 text-[12px] text-sidebar-foreground/70 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                        onClick={async () => {
+                            await signOut({ callbackUrl: "/login" });
+                        }}
                     >
-                        <LogOut className="mr-2 h-4 w-4" />
+                        <LogOut className="mr-2 h-[12px] w-[12px]" />
                         Logout
                     </Button>
                 </div>

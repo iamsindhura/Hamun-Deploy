@@ -23,6 +23,44 @@ interface TaskListViewProps {
  workdayEnd?: string;
 }
 
+function getCompletedText(completedAt: string | Date | null) {
+    if (!completedAt) return null;
+    const date = new Date(completedAt);
+    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `✔ Completed: ${dateStr} • ${timeStr}`;
+}
+
+function getOverdueText(endTime: string | Date | null) {
+    if (!endTime) return null;
+    const end = new Date(endTime);
+    const now = new Date();
+    if (end >= now) return null;
+
+    const diffMs = now.getTime() - end.getTime();
+    const diffMinsTotal = Math.floor(diffMs / 60000);
+    const diffDays = Math.floor(diffMinsTotal / (60 * 24));
+    const remainingHrs = Math.floor((diffMinsTotal % (60 * 24)) / 60);
+    const remainingMins = diffMinsTotal % 60;
+
+    let durationStr = "";
+    if (diffDays > 0) {
+        durationStr += `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+        if (remainingHrs > 0) {
+            durationStr += ` ${remainingHrs} hr${remainingHrs > 1 ? 's' : ''}`;
+        }
+    } else if (remainingHrs > 0) {
+        durationStr += `${remainingHrs} hr${remainingHrs > 1 ? 's' : ''}`;
+        if (remainingMins > 0) {
+            durationStr += ` ${remainingMins} min`;
+        }
+    } else {
+        durationStr += `${remainingMins} min`;
+    }
+
+    return `⏱ Overdue: ${durationStr}`;
+}
+
 export function TaskListView({ tasks: initialTasks, showDate = false, variant = "default", workdayStart = "09:00", workdayEnd = "18:00" }: TaskListViewProps) {
  const [tasks, setTasks] = useState(initialTasks);
  const [selectedTask, setSelectedTask] = useState<any | null>(null);
@@ -163,14 +201,23 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  isWithinWorkday = startMins >= wsMins && endMins <= weMins && !crossesMidnight;
  }
 
- let timePanelColor = "";
- if (task.startTime && task.endTime) {
- timePanelColor = isWithinWorkday
- ? "bg-[#FACC15]/10 text-[#FACC15] border-r border-[#FACC15]/20" // Yellow
- : "bg-[#8B5CF6]/10 text-[#8B5CF6] border-r border-[#8B5CF6]/20"; // Purple
- } else {
- timePanelColor = "bg-[#FACC15]/10 text-[#FACC15] border-r border-[#FACC15]/20"; // Yellow for Unscheduled
- }
+  let timePanelColor = "";
+  let arrowColorClass = "opacity-50"; // default
+  
+  if (task.startTime && task.endTime) {
+      if (isWithinWorkday) {
+          // Soft warm yellow for Workday
+          timePanelColor = "bg-[#F4D35E] text-[#4A3B00] font-bold border-r border-[#E9C46A]";
+          arrowColorClass = "text-[#6B5200]";
+      } else {
+          // Soft modern purple for Outside Workday
+          timePanelColor = "bg-[#C4B5FD] text-[#111827] font-bold border-r border-[#8B5CF6]";
+          arrowColorClass = "text-[#111827]";
+      }
+  } else {
+      // Bright yellow theme for Unscheduled tasks
+      timePanelColor = "bg-[#FACC15] text-[#111827] font-bold border-r border-[#EAB308]"; 
+  }
 
  return (
  <div 
@@ -180,10 +227,10 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  {task.startTime && task.endTime ? (
  <div className={cn("w-[110px] sm:w-[130px] shrink-0 p-3 sm:p-4 flex flex-col justify-center items-center", timePanelColor)}>
  <div className="flex flex-col items-center justify-center gap-1.5 text-sm font-bold tracking-tight">
- <span className="text-[14px] leading-none">{new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
- <div className="h-4 flex items-center justify-center opacity-50">
- <ArrowDown className="w-4 h-4" />
- </div>
+  <span className="text-[14px] leading-none">{new Date(task.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+  <div className={cn("h-4 flex items-center justify-center", arrowColorClass)}>
+  <ArrowDown className="w-4 h-4" />
+  </div>
  <span className="text-[14px] leading-none">{new Date(task.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
  </div>
  </div>
@@ -230,6 +277,16 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
  )}>
  {task.priority === "NONE" ? "NONE" : task.priority}
+ </span>
+ )}
+ {variant === "completed" && task.completedAt && (
+ <span className="text-[11px] font-medium bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0] px-2.5 py-0.5 rounded-full w-fit">
+ {getCompletedText(task.completedAt)}
+ </span>
+ )}
+ {variant === "overdue" && task.endTime && new Date(task.endTime) < new Date() && (
+ <span className="text-[11px] font-medium bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA] px-2.5 py-0.5 rounded-full w-fit">
+ {getOverdueText(task.endTime)}
  </span>
  )}
  </div>

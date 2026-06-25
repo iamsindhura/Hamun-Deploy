@@ -6,9 +6,9 @@ export default function LoginPage() {
  <div className="w-full max-w-md mx-4 bg-white rounded-2xl p-8 shadow-2xl border border-slate-100">
  {/* Logo / Brand */}
  <div className="text-center mb-8">
- <img src="/logo-icon.png" alt="Hamun Logo" className="mx-auto h-32 w-32 object-contain mb-4" />
- <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Hamun</h1>
- <p className="text-slate-600 mt-1 text-sm">CRM, Todo, Habits & Journal</p>
+ <img src="/logo/login-logo.png" alt="Hamun Logo" className="mx-auto h-[200px] w-[200px] object-contain overflow-visible mb-1 -mt-6" />
+ <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Hamun</h1>
+ <p className="text-slate-600 mt-2 text-sm">CRM, Todo, Habits & Journal</p>
  </div>
 
  {/* Sign In Form */}

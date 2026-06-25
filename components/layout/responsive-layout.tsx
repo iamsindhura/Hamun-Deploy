@@ -33,10 +33,6 @@ export function ResponsiveLayout({
  >
  <Menu className="h-5.5 w-5.5" />
  </button>
- <Link href="/" className="flex items-center gap-1.5">
- <img src="/logo-icon.png" alt="Hamun Logo" className="h-7 w-7 object-contain rounded-md" />
- <span className="font-bold tracking-tight text-sm">Hamun</span>
- </Link>
  </div>
  <ThemeToggle />
  </header>
