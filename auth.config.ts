@@ -3,7 +3,13 @@ import Google from "next-auth/providers/google";
 
 export const authConfig = {
   providers: [
-    Google,
+    Google({
+      authorization: {
+        params: {
+          prompt: "consent select_account",
+        },
+      },
+    }),
   ],
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {

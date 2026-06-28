@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -123,5 +124,104 @@
     }
   html {
     @apply font-sans;
-    }
+  }
 }
+
+/* Custom modern scrollbar for timeline */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #E5E7EB;
+  border-radius: 10px;
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: #D1D5DB;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Landing Page Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes float-delayed {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes pulse-line {
+  0% { opacity: 0.2; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.2; }
+}
+@keyframes progress-fill {
+  0% { width: 0%; }
+  100% { width: var(--progress); }
+}
+@keyframes circle-fill {
+  0% { stroke-dashoffset: 283; }
+  100% { stroke-dashoffset: var(--score-offset); }
+}
+@keyframes particle-drift {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0.1; }
+  50% { opacity: 0.5; }
+  100% { transform: translate(100px, -100px) rotate(45deg); opacity: 0.1; }
+}
+@keyframes text-fade {
+  0%, 15% { opacity: 0; transform: translateY(10px); }
+  25%, 75% { opacity: 1; transform: translateY(0); }
+  85%, 100% { opacity: 0; transform: translateY(-10px); }
+}
+@keyframes drift-apart {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  100% { transform: translate(var(--drift-x), var(--drift-y)) rotate(var(--drift-r)); }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(129, 140, 248, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(129, 140, 248, 0.6); }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-float-delayed { animation: float-delayed 8s ease-in-out infinite 2s; }
+.animate-pulse-line { animation: pulse-line 3s ease-in-out infinite; }
+.animate-progress { animation: progress-fill 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-circle { animation: circle-fill 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-particle { animation: particle-drift 20s linear infinite alternate; }
+.animate-drift { animation: drift-apart 30s ease-in-out infinite alternate; }
+.animate-glow { animation: glow-pulse 4s ease-in-out infinite; }
+
+/* Reveal on Scroll Utilities */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 1s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.reveal.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-blur {
+  opacity: 0;
+  filter: blur(10px);
+  transform: scale(0.95);
+  transition: all 1s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.reveal-blur.active {
+  opacity: 1;
+  filter: blur(0px);
+  transform: scale(1);
+}
+.reveal-delay-1 { transition-delay: 100ms; }
+.reveal-delay-2 { transition-delay: 200ms; }
+.reveal-delay-3 { transition-delay: 300ms; }
+.reveal-delay-4 { transition-delay: 400ms; }
+.reveal-delay-5 { transition-delay: 500ms; }

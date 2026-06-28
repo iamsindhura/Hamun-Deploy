@@ -1,19 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import { format, subMonths, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isFuture, startOfWeek, endOfWeek, isSameDay } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface JournalCalendarProps {
+  selectedDate: Date | null;
   onDateSelect?: (date: Date) => void;
-  // Mock array of dates that have journal entries
+  // Array of dates that have journal entries
   journalDates?: Date[];
 }
 
-export function JournalCalendar({ onDateSelect, journalDates = [] }: JournalCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+export function JournalCalendar({ selectedDate, onDateSelect, journalDates = [] }: JournalCalendarProps) {
+  const [currentDate, setCurrentDate] = useState(selectedDate || new Date());
+
+  // Update current month view if selectedDate changes externally
+  useEffect(() => {
+    if (selectedDate && !isSameMonth(currentDate, selectedDate)) {
+      setCurrentDate(selectedDate);
+    }
+  }, [selectedDate]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -26,76 +33,77 @@ export function JournalCalendar({ onDateSelect, journalDates = [] }: JournalCale
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
-  const onDateClick = (day: Date) => {
-    setSelectedDate(day);
-    if (onDateSelect) {
-      onDateSelect(day);
-    }
-  };
-
   const hasJournalEntry = (day: Date) => {
     return journalDates.some(journalDate => isSameDay(journalDate, day));
   };
 
+  const onDateClick = (day: Date) => {
+    if (hasJournalEntry(day)) {
+      if (onDateSelect) {
+        onDateSelect(day);
+      }
+    }
+  };
+
   return (
-    <div className="bg-white rounded-2xl border border-transparent shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-4 w-full max-w-[280px] mx-auto md:mx-0">
+    <div className="bg-white rounded-xl border border-transparent shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-2 w-full max-w-[200px] mx-auto md:mx-0">
       
       {/* Calendar Header */}
-      <div className="flex justify-between items-center mb-6 px-2">
+      <div className="flex justify-between items-center mb-2 px-1">
         <button 
           onClick={prevMonth}
           className="hover:bg-gray-50 rounded p-1 transition-colors text-[#4B5563]"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-3.5 h-3.5" />
         </button>
-        <span className="font-bold text-[15px] tracking-wide text-[#111827]">
+        <span className="font-bold text-[12px] tracking-wide text-[#111827]">
           {format(currentDate, dateFormat)}
         </span>
         <button 
           onClick={nextMonth}
           className="hover:bg-gray-50 rounded p-1 transition-colors text-[#4B5563]"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Week Days Header */}
-      <div className="grid grid-cols-7 gap-1 mb-4">
+      <div className="grid grid-cols-7 gap-1 mb-2">
         {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-          <div key={day} className="text-center text-[12px] font-medium text-[#9CA3AF]">
+          <div key={day} className="text-center text-[9px] font-medium text-[#9CA3AF]">
             {day}
           </div>
         ))}
       </div>
 
       {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-y-3 gap-x-1 place-items-center">
+      <div className="grid grid-cols-7 gap-y-1 gap-x-1 place-items-center">
         {daysInCalendar.map((day, idx) => {
-          const isSelected = isSameDay(day, selectedDate);
+          const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
           const isCurrentMonth = isSameMonth(day, monthStart);
           const isDayToday = isToday(day);
           const isDayFuture = isFuture(day) && !isDayToday;
           const hasJournal = hasJournalEntry(day);
 
           return (
-            <div key={idx} className="relative flex flex-col items-center justify-center w-9 h-10">
+            <div key={idx} className="relative flex flex-col items-center justify-center w-6 h-7">
               <button
-                disabled={isDayFuture}
+                disabled={isDayFuture || (!hasJournal && !isDayToday)} 
                 onClick={() => onDateClick(day)}
                 className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold transition-all duration-200",
-                  !isCurrentMonth ? "text-[#D1D5DB] hover:bg-gray-50" : "text-[#111827] hover:bg-[#F3F4F6]",
-                  isSelected ? "bg-[#6366F1] text-white hover:bg-[#4F46E5] shadow-sm" : "",
-                  isDayFuture ? "cursor-not-allowed opacity-50" : ""
+                  "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold transition-all duration-200",
+                  isSelected 
+                    ? "bg-[#7A5AF8] text-white shadow-md hover:bg-[#6b4ce6]" 
+                    : isDayToday 
+                      ? "border border-[#7A5AF8] text-[#7A5AF8] shadow-[0_0_8px_rgba(122,90,248,0.2)] hover:bg-[#7A5AF8]/5"
+                      : !isCurrentMonth 
+                        ? "text-[#E5E7EB]" 
+                        : "text-[#4B5563] hover:bg-gray-100",
+                  (isDayFuture || (!hasJournal && !isDayToday)) ? "cursor-not-allowed opacity-40 hover:bg-transparent" : "cursor-pointer" 
                 )}
               >
                 <span>{format(day, "d")}</span>
               </button>
-              
-              {/* Journal Indicator Dot */}
-              {hasJournal && (
-                <div className="absolute bottom-0 w-1 h-1 rounded-full bg-[#8B5CF6]" />
-              )}
             </div>
           );
         })}

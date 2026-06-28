@@ -362,16 +362,9 @@ export function TaskListView({ tasks: initialTasks, showDate = false, variant = 
  <DropdownMenuItem onClick={() => setSelectedTask(task)}>
  <Calendar className="h-4 w-4 mr-2" /> Schedule
  </DropdownMenuItem>
- <DropdownMenuItem onClick={async () => {
- setRecoveringTaskId(task.id);
- const result = await scheduleUnscheduledTask(task.id);
- setRecoveringTaskId(null);
- if (result.success) {
- toast.success("Task auto-scheduled");
- setTasks(prev => prev.filter(t => t.id !== task.id));
- } else {
- toast.error(result.error);
- }
+ <DropdownMenuItem onClick={() => {
+ setConfirmTask(task);
+ setConfirmAction('MOVE_NEXT_FREE_SLOT');
  }}>
  <Clock className="h-4 w-4 mr-2" /> Move to Next Free Slot
  </DropdownMenuItem>

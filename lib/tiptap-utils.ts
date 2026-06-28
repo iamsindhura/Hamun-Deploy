@@ -69,3 +69,40 @@ function createEmptyTiptapDoc() {
     ]
   };
 }
+
+/**
+ * Extracts plain text from a TipTap JSON structure for timeline previews.
+ */
+export function extractTextFromTiptap(content: any): string {
+  if (!content || !Array.isArray(content.content)) return "";
+  
+  let text = "";
+  for (const node of content.content) {
+    if (node.type === 'paragraph' || node.type === 'heading') {
+      if (node.content && Array.isArray(node.content)) {
+        for (const child of node.content) {
+          if (child.type === 'text' && child.text) {
+            text += child.text;
+          }
+        }
+      }
+      text += " ";
+    } else if (node.type === 'bulletList' || node.type === 'orderedList') {
+      if (node.content && Array.isArray(node.content)) {
+        for (const item of node.content) {
+          text += extractTextFromTiptap(item) + " ";
+        }
+      }
+    } else if (node.type === 'listItem') {
+      if (node.content && Array.isArray(node.content)) {
+        for (const item of node.content) {
+          text += extractTextFromTiptap(item) + " ";
+        }
+      }
+    } else if (node.type === 'blockquote') {
+      text += extractTextFromTiptap(node) + " ";
+    }
+  }
+  
+  return text.trim();
+}

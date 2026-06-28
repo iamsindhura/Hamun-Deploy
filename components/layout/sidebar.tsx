@@ -209,7 +209,7 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
     const pathname = usePathname();
     const router = useRouter();
 
-    const [activeTab, setActiveTab] = useState<"crm" | "tasks">("crm");
+    const activeTab = (pathname.startsWith("/tasks") || pathname.startsWith("/deep-work") || pathname.startsWith("/focus")) ? "tasks" : "crm";
     const [localProjects, setLocalProjects] = useState<any[]>(projects);
     const [width, setWidth] = useState(256);
     const [isResizing, setIsResizing] = useState(false);
@@ -259,14 +259,6 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
     useEffect(() => {
         setLocalProjects(projects);
     }, [projects]);
-
-    useEffect(() => {
-        if (pathname.startsWith("/tasks") || pathname.startsWith("/deep-work") || pathname.startsWith("/focus")) {
-            setActiveTab("tasks");
-        } else {
-            setActiveTab("crm");
-        }
-    }, [pathname]);
 
     const handleCreateProject = async () => {
         const name = prompt("Enter Project Name:");
@@ -379,7 +371,6 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
                         <button
                             className={cn("flex-1 flex items-center justify-center gap-2 py-1.5 text-xs rounded-md transition-all", activeTab === "crm" && pathname !== "/journal" && pathname !== "/deep-work" ? "text-white font-semibold" : "text-sidebar-foreground/60 hover:text-sidebar-foreground font-semibold")}
                             onClick={() => {
-                                setActiveTab("crm");
                                 router.push("/");
                                 if (onClose) onClose();
                             }}
@@ -389,7 +380,6 @@ export function Sidebar({ projects = [], isOpen = false, onClose }: { projects?:
                         <button
                             className={cn("flex-1 flex items-center justify-center gap-2 py-1.5 text-xs rounded-md transition-all", activeTab === "tasks" && pathname !== "/journal" && pathname !== "/deep-work" ? "text-white font-semibold" : "text-sidebar-foreground/60 hover:text-sidebar-foreground font-semibold")}
                             onClick={() => {
-                                setActiveTab("tasks");
                                 router.push("/tasks/today");
                                 if (onClose) onClose();
                             }}

@@ -225,25 +225,6 @@ export function FocusTimer({
  {isCompleting ? "Saving..." : "Complete Session"}
  </button>
  </div>
-
- {process.env.NODE_ENV === "development" && (
- <button 
- onClick={() => {
- if ("Notification" in window && Notification.permission === "granted") {
- new Notification("Hamun Test", { body: "Notifications are working correctly" });
- } else if ("Notification" in window && Notification.permission === "default") {
- Notification.requestPermission().then(p => {
- if (p === "granted") new Notification("Hamun Test", { body: "Notifications are working correctly" });
- });
- } else {
- alert("Notifications are denied or not supported by your browser.");
- }
- }}
- className="mt-12 px-6 py-2.5 bg-slate-800/50 text-slate-400 border border-slate-700 rounded-full text-sm font-medium hover:bg-slate-800 hover:text-slate-300 transition-colors"
- >
- Test Notification
- </button>
- )}
  
  <div className="mt-12 text-slate-500 font-medium tracking-wide">
  Actual Focus Time: <span className="text-slate-300">{formatTime(actualSeconds)}</span>

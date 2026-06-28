@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/providers/theme-provider";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { updateTheme } from "@/app/actions/user";
 import { 

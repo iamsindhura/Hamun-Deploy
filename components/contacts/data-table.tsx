@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import React, { useState } from "react";
 import {
  ColumnDef,
  ColumnFiltersState,
@@ -81,11 +81,11 @@ interface DataTableProps {
 }
 
 export function DataTable({ data, onEdit }: DataTableProps) {
- const [sorting, setSorting] = React.useState<SortingState>([]);
- const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
- const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
- const [rowSelection, setRowSelection] = React.useState({});
- const [globalFilter, setGlobalFilter] = React.useState("");
+ const [sorting, setSorting] = useState<SortingState>([]);
+ const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+ const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+ const [rowSelection, setRowSelection] = useState({});
+ const [globalFilter, setGlobalFilter] = useState("");
 
  const columns: ColumnDef<Contact>[] = [
  {

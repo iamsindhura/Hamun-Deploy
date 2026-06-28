@@ -104,7 +104,7 @@ export function TaskActionConfirmations({
           : await recoverOverdueTask(task.id, actionType);
 
         if (result.success) {
-          toast.success(actionType === 'MOVE_TOMORROW' ? "Task moved to tomorrow" : "Task moved to next free slot");
+          toast.success(actionType === 'MOVE_TOMORROW' ? "Task moved to tomorrow" : "Task moved to the next available free slot.");
           onSuccess(task.id, actionType);
         } else {
           toast.error(result.error || "Failed to move task");
@@ -145,8 +145,8 @@ export function TaskActionConfirmations({
       icon = <ArrowRight className="h-4 w-4 mr-2" />;
       break;
     case 'MOVE_NEXT_FREE_SLOT':
-      title = "Move to Next Free Slot?";
-      confirmLabel = "Move";
+      title = "Move Task to Next Free Slot";
+      confirmLabel = "Move Task";
       icon = <Clock className="h-4 w-4 mr-2" />;
       break;
   }
@@ -173,7 +173,7 @@ export function TaskActionConfirmations({
               <div className="space-y-4">
                 {actionType === 'MOVE_NEXT_FREE_SLOT' && (
                   <div className="text-muted-foreground">
-                    The system will automatically find the next available time slot and reschedule this task.
+                    This will automatically reschedule the selected task to the next available free time slot in your schedule. The task duration will remain unchanged.
                   </div>
                 )}
                 <div className="rounded-lg bg-muted p-4 space-y-3 border border-border">

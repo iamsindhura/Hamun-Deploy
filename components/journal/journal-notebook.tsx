@@ -1,108 +1,196 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { format } from "date-fns";
 import { Sparkles, Edit2, ChevronDown, Camera, Lightbulb, Target, Heart, HeartHandshake } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateJournal, getJournal, saveJournal } from "@/app/actions/journal";
 import Image from "next/image";
 import { TiptapEditor } from "@/components/journal/editor/TiptapEditor";
-import { parseJournalContent } from "@/lib/tiptap-utils";
+import { parseJournalContent, extractTextFromTiptap } from "@/lib/tiptap-utils";
 import { toast } from "sonner";
+import { EMOTIONS } from "@/lib/emotions";
+import { Check } from "lucide-react";
 
 interface JournalNotebookProps {
-  date: Date;
-  emotion: string;
-  setEmotion: (emotion: string) => void;
+  selectedDate: Date;
+  activeJournal: any;
+  onUpdateJournal: (updates: any) => void;
   editMode: boolean;
   setEditMode: (mode: boolean) => void;
   editorSticker: string | null;
   setEditorSticker: (sticker: string | null) => void;
+  onRegenerate: () => void;
+  loadingPhase: string | null;
+  editorRef?: any;
 }
 
-const MOODS = [
-  { emoji: "😊", label: "Amazing", value: "Amazing" },
-  { emoji: "🙂", label: "Good", value: "Good" },
-  { emoji: "😐", label: "Okay", value: "Okay" },
-  { emoji: "😔", label: "Tired", value: "Tired" },
-  { emoji: "😢", label: "Bad", value: "Bad" }
-];
+export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, editMode, setEditMode, editorSticker, setEditorSticker, onRegenerate, loadingPhase, editorRef }: JournalNotebookProps) {
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [isEmotionDropdownOpen, setIsEmotionDropdownOpen] = useState(false);
+  
+  // Dragging state
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, startPosX: 0, startPosY: 0 });
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const paperRef = useRef<HTMLDivElement>(null);
+  const latestPosition = useRef(position);
 
-export function JournalNotebook({ date, emotion, setEmotion, editMode, setEditMode, editorSticker, setEditorSticker }: JournalNotebookProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [journalData, setJournalData] = useState<any>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [content, setContent] = useState<any>(null);
-
-  // Load existing journal on date change
   useEffect(() => {
-    async function loadJournal() {
-      setIsLoading(true);
-      try {
-        const existing = await getJournal(date);
-        if (existing) {
-          setJournalData(existing);
-          setContent(parseJournalContent(existing.content || existing.originalText));
-        } else {
-          setJournalData(null);
-          setContent(null);
-          setEditMode(false);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadJournal();
-  }, [date]);
+    latestPosition.current = position;
+  }, [position]);
 
-  const handleRegenerate = async () => {
-    setIsLoading(true);
-    try {
-      const response = await generateJournal(emotion);
-      if (response.success && response.journal) {
-        setJournalData(response.journal);
-        setContent(parseJournalContent(response.journal.content || response.journal.originalText));
-      } else {
-        alert(response.error || "Failed to generate journal");
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const debouncedSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus logic when entering edit mode
+  useEffect(() => {
+    if (editMode) {
+      setTimeout(() => {
+        const titleVal = activeJournal?.insights?.title;
+        if (!titleVal || titleVal === "A Day of Reflection") {
+          titleInputRef.current?.focus();
+        }
+      }, 50);
     }
+  }, [editMode, activeJournal]);
+
+  // Handle click outside to close emotion dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsEmotionDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Sync content when activeJournal changes (only if it's a different journal or content updated externally)
+  const contentHash = activeJournal ? JSON.stringify(activeJournal.content || activeJournal.originalText) : null;
+  
+  const derivedContent = useMemo(() => {
+    if (!activeJournal && !editMode) return null;
+    return parseJournalContent(activeJournal?.content || activeJournal?.originalText);
+  }, [activeJournal?.id, contentHash, editMode]);
+  
+  useEffect(() => {
+    if (activeJournal) {
+      if (activeJournal.insights?.stickyNotePosition) {
+        setPosition(activeJournal.insights.stickyNotePosition);
+      } else {
+        setPosition({ x: 0, y: 0 });
+      }
+    } else {
+      setEditMode(false);
+      setPosition({ x: 0, y: 0 });
+    }
+  }, [activeJournal?.id]);
+
+  const triggerAutoSave = (updatedFields: any, newContent: any) => {
+    setSaveStatus("saving");
+    
+    // Optimistic update
+    onUpdateJournal(updatedFields);
+
+    if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
+    debouncedSaveRef.current = setTimeout(async () => {
+      try {
+        const fullJournal = { ...activeJournal, ...updatedFields };
+        const safeContent = JSON.parse(JSON.stringify(newContent || fullJournal.content || {}));
+        const safeMetadata = JSON.parse(JSON.stringify({
+          quote: fullJournal.quote,
+          sticker: fullJournal.sticker,
+          tags: fullJournal.tags,
+          productivityScore: fullJournal.productivityScore,
+          focusStreak: fullJournal.focusStreak,
+          insights: fullJournal.insights
+        }));
+
+        await saveJournal(new Date(fullJournal.date).toISOString(), safeContent, safeMetadata);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch (e) {
+        console.error("Auto-save failed", e);
+      }
+    }, 1000);
   };
 
-  const handleSave = async () => {
-    if (!journalData) return;
-    try {
-      setIsSaving(true);
-      const res = await saveJournal(journalData.date, content, {
-        quote: journalData.quote,
-        sticker: journalData.sticker,
-        tags: journalData.tags,
-        productivityScore: journalData.productivityScore,
-        focusStreak: journalData.focusStreak,
-        insights: journalData.insights
-      });
-      if (res.success && res.journal) {
-        setJournalData(res.journal);
-        setEditMode(false);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSaving(false);
+  const handleUpdate = (field: string, value: any) => {
+    if (!activeJournal) return;
+    
+    let updates: any = {};
+    if (field === 'title') {
+      updates = { insights: { ...activeJournal.insights, title: value } };
+    } else if (field === 'emotion') {
+      updates = { sticker: value, insights: { ...activeJournal.insights, emotion: value } };
+    } else if (field === 'quote') {
+      updates = { quote: value };
+    } else if (field === 'stickyNotePosition') {
+      updates = { insights: { ...activeJournal.insights, stickyNotePosition: value } };
     }
+    
+    triggerAutoSave(updates, derivedContent);
   };
 
   // Safe getters for complex nested data
-  const originalText = journalData?.originalText || "";
-  const insights = journalData?.insights || {};
-  const quote = journalData?.quote || "Not every day needs to be a sprint; sometimes, the quiet days are just as crucial for recharging and realigning.";
+  const insights = activeJournal?.insights || {};
+  const quote = activeJournal?.quote || "Not every day needs to be a sprint; sometimes, the quiet days are just as crucial for recharging and realigning.";
   const title = insights?.title || "A Day of Reflection";
+  const emotion = activeJournal?.sticker || "Neutral";
   
+  // Dragging Logic
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).tagName.toLowerCase() === 'textarea') return;
+    
+    e.preventDefault();
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      startPosX: position.x,
+      startPosY: position.y
+    };
+    
+    const handleMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - dragStart.current.x;
+      const deltaY = moveEvent.clientY - dragStart.current.y;
+      
+      let newX = dragStart.current.startPosX + deltaX;
+      let newY = dragStart.current.startPosY + deltaY;
+      
+      if (paperRef.current && stickyRef.current) {
+        const paperRect = paperRef.current.getBoundingClientRect();
+        const currentRect = stickyRef.current.getBoundingClientRect();
+        
+        const baseX = currentRect.left - latestPosition.current.x;
+        const baseY = currentRect.top - latestPosition.current.y;
+        
+        const minX = paperRect.left - baseX + 24;
+        const maxX = paperRect.right - currentRect.width - baseX - 24;
+        const minY = paperRect.top - baseY + 24;
+        const maxY = paperRect.bottom - currentRect.height - baseY - 24;
+        
+        newX = Math.max(minX, Math.min(newX, maxX));
+        newY = Math.max(minY, Math.min(newY, maxY));
+      }
+      
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleUp);
+      handleUpdate('stickyNotePosition', latestPosition.current);
+    };
+
+    document.addEventListener('pointermove', handleMove);
+    document.addEventListener('pointerup', handleUp);
+  };
+
   // Extract images from tipTap content
   const extractImages = (content: any) => {
     if (!content || !content.content) return [];
@@ -111,98 +199,194 @@ export function JournalNotebook({ date, emotion, setEmotion, editMode, setEditMo
       .map((node: any) => node.attrs.src);
   };
   
-  const images = extractImages(journalData?.content);
+  const images = extractImages(activeJournal?.content);
 
   return (
     <div className="flex-1 max-w-[1000px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 relative h-full overflow-y-auto">
       
-      {/* Paper Container */}
-      <div className="relative w-full bg-[#FDFBF7] rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-[#E5E7EB]/50 p-8 md:p-14 min-h-[800px] font-serif text-[#374151]">
-        
-        {/* Sticky Note */}
-        <div className="absolute top-8 right-8 w-64 bg-[#F3E8FF] rounded-sm p-5 shadow-md transform rotate-2 z-10 font-sans">
-          {/* Push pin */}
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#D4AF37] shadow-sm flex items-center justify-center">
-            <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+      {loadingPhase ? (
+        <div className="w-full h-[800px] bg-[#FDFBF7] rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-[#E5E7EB]/50 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500">
+          <div className="w-16 h-16 mb-8 relative">
+            <div className="absolute inset-0 rounded-full border-4 border-[#7A5AF8]/20"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-[#7A5AF8] border-t-transparent animate-spin"></div>
           </div>
-          <p className="text-[13px] leading-relaxed text-[#581C87] font-medium italic">
-            "{quote}"
-          </p>
-          <div className="flex justify-end mt-2">
-            <Heart className="w-4 h-4 text-[#A855F7]" />
-          </div>
+          <h2 className="text-2xl font-serif italic text-[#4B5563] mb-2 animate-pulse">{loadingPhase}</h2>
+          <p className="text-sm text-[#9CA3AF]">This might take a moment.</p>
         </div>
+      ) : (
+      <div 
+        ref={paperRef}
+        className="relative w-full bg-[#FDFBF7] rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-[#E5E7EB]/50 px-8 pt-5 pb-8 md:px-14 md:pt-6 md:pb-14 min-h-[800px] font-serif text-[#374151] animate-in fade-in duration-1000"
+      >
+        
+
 
         {/* Date Header */}
-        <div className="text-[11px] font-bold tracking-[0.2em] text-[#9CA3AF] uppercase mb-4 font-sans">
-          {format(date, "EEEE, MMMM do, yyyy")}
+        <div className="text-[11px] font-bold tracking-[0.2em] text-[#9CA3AF] uppercase mb-3 font-sans">
+          {format(activeJournal?.date ? new Date(activeJournal.date) : selectedDate, "EEEE, MMMM do, yyyy")}
         </div>
 
-        {/* Title */}
-        <div className="relative inline-block mb-10">
-          <h1 className="text-4xl md:text-5xl font-medium tracking-tight text-[#111827] italic">
-            {title}
-          </h1>
+        {/* Title & Subtitle */}
+        <div className="relative inline-block mb-8 w-full max-w-2xl">
+          {editMode ? (
+            <div className="flex flex-col gap-2">
+              <input
+                ref={titleInputRef}
+                value={title === "A Day of Reflection" ? "" : title}
+                onChange={(e) => handleUpdate('title', e.target.value)}
+                className="text-4xl md:text-5xl font-medium tracking-tight text-[#111827] italic bg-transparent focus:outline-none border-b border-dashed border-[#7A5AF8]/30 w-full pb-1"
+                placeholder="Journal Title"
+              />
+              <input
+                value={activeJournal?.subtitle || ""}
+                onChange={(e) => handleUpdate('subtitle', e.target.value)}
+                className="text-lg md:text-xl font-medium text-muted-foreground bg-transparent focus:outline-none border-b border-dashed border-[#7A5AF8]/30 w-full pb-1"
+                placeholder="Subtitle"
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <h1 className="text-4xl md:text-5xl font-medium tracking-tight text-[#111827] italic">
+                {title}
+              </h1>
+              {activeJournal?.subtitle && (
+                <p className="text-lg md:text-xl font-medium text-muted-foreground">
+                  {activeJournal.subtitle}
+                </p>
+              )}
+            </div>
+          )}
           <div className="absolute -bottom-2 left-0 w-[110%] h-2 bg-[#E9D5FF] -rotate-1 -z-10 rounded-full opacity-60" />
         </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 mb-12 font-sans">
-          <div className="flex items-center gap-2 bg-white border border-[#E5E7EB] rounded-full px-4 py-2 text-sm text-[#4B5563] shadow-sm">
-            <span className="text-xs text-muted-foreground font-medium">Today's Emotion:</span>
-            <select 
-              value={emotion}
-              onChange={(e) => setEmotion(e.target.value)}
-              className="bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-foreground font-semibold flex items-center gap-1.5 outline-none appearance-none pr-4"
-              disabled={editMode}
-            >
-              <option value={emotion}>😌 {emotion}</option>
-              {MOODS.map(m => (
-                <option key={m.value} value={m.label}>{m.emoji} {m.label}</option>
-              ))}
-            </select>
+        {/* Toolbar & Sticky Note Area */}
+        <div className="flex flex-col gap-5 mb-4 font-sans w-full">
+          
+          {/* Row 1: Emotion */}
+          <div className="flex">
+            <div className="relative" ref={dropdownRef}>
+              <div 
+                onClick={() => setIsEmotionDropdownOpen(!isEmotionDropdownOpen)}
+                className="flex items-center gap-2 bg-white border border-[#E5E7EB] rounded-full px-4 py-2 text-sm text-[#4B5563] shadow-sm transition-all cursor-pointer hover:bg-gray-50 inline-flex"
+              >
+                <span className="text-xs text-muted-foreground font-medium">Today's Emotion:</span>
+                <div className="flex items-center gap-1.5 font-semibold pr-2 text-foreground">
+                  {EMOTIONS.find(e => e.label === (emotion.includes(" ") ? emotion.split(" ")[1] : emotion))?.emoji || "😌"} {emotion.includes(" ") ? emotion.split(" ")[1] : emotion}
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-1" />
+                </div>
+              </div>
+
+              {/* Dropdown Menu */}
+              {isEmotionDropdownOpen && (
+                <div className="absolute top-full mt-2 left-0 w-56 max-h-80 overflow-y-auto custom-scrollbar bg-white rounded-2xl shadow-xl border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-2 space-y-1">
+                    {EMOTIONS.map((m) => {
+                      const isSelected = emotion.includes(m.label);
+                      return (
+                        <button
+                          key={m.label}
+                          onClick={() => {
+                            handleUpdate('emotion', `${m.emoji} ${m.label}`);
+                            setIsEmotionDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full flex items-center justify-between text-left px-3 py-2.5 rounded-xl text-sm transition-colors",
+                            isSelected ? "bg-[#F3E8FF] text-[#6B21A8] font-bold" : "text-gray-700 hover:bg-gray-50"
+                          )}
+                        >
+                          <span className="flex items-center gap-2.5">
+                            <span className="text-lg">{m.emoji}</span>
+                            <span>{m.label}</span>
+                          </span>
+                          {isSelected && <Check className="w-4 h-4 text-[#7A5AF8]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {editMode ? (
-            <>
-              <button 
-                onClick={() => setEditMode(false)}
-                className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-2 bg-[#15803D] hover:bg-[#166534] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors"
-              >
-                {isSaving ? "Saving..." : "Save Changes"}
-              </button>
-            </>
-          ) : (
-            <button 
-              onClick={() => setEditMode(true)}
-              disabled={!journalData}
-              className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors disabled:opacity-50"
+          {/* Row 2: Edit, Regenerate & Sticky Note */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 w-full">
+            
+            {/* Left Column: Edit & Regenerate */}
+            <div className="flex flex-col gap-4 shrink-0">
+              
+              {/* Edit Button */}
+              <div>
+                {editMode ? (
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setEditMode(false)}
+                      className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors"
+                    >
+                      Done
+                    </button>
+                    {saveStatus === "saving" && <span className="text-sm text-muted-foreground font-medium animate-pulse">Saving...</span>}
+                    {saveStatus === "saved" && <span className="text-sm text-green-600 font-medium">Saved</span>}
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => setEditMode(true)}
+                    className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" /> Edit
+                  </button>
+                )}
+              </div>
+
+              {/* Regenerate Button */}
+              {!editMode && (
+                <div>
+                  <button 
+                    onClick={onRegenerate}
+                    disabled={!!loadingPhase}
+                    className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    <Sparkles className="w-4 h-4" /> Regenerate
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Sticky Note */}
+            <div 
+              ref={stickyRef}
+              onPointerDown={handlePointerDown}
+              style={{
+                transform: `translate3d(${position.x}px, ${position.y}px, 0) rotate(2deg) scale(${isDragging ? 1.02 : 1})`,
+                cursor: isDragging ? 'grabbing' : 'grab',
+                transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)'
+              }}
+              className={cn(
+                "relative w-64 bg-[#F3E8FF] rounded-sm p-5 shrink-0 z-40 touch-none select-none",
+                isDragging ? "shadow-xl" : "shadow-md"
+              )}
             >
-              <Edit2 className="w-4 h-4" /> Edit
-            </button>
-          )}
-
-          {!editMode && (
-
-          <button 
-            onClick={handleRegenerate}
-            disabled={isLoading}
-            className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors ml-auto md:ml-2"
-          >
-            {isLoading ? (
-              <span className="flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"/> Generating...</span>
-            ) : (
-              <><Sparkles className="w-4 h-4" /> Regenerate</>
-            )}
-          </button>
-          )}
+              {/* Push pin */}
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#D4AF37] shadow-sm flex items-center justify-center pointer-events-none">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+              </div>
+              {editMode ? (
+                <textarea
+                  value={quote}
+                  onChange={(e) => handleUpdate('quote', e.target.value)}
+                  className="w-full bg-transparent resize-none text-[13px] leading-relaxed text-[#581C87] font-medium italic focus:outline-none placeholder-[#581C87]/50"
+                  placeholder="Sticky note text..."
+                  rows={4}
+                />
+              ) : (
+                <p className="text-[13px] leading-relaxed text-[#581C87] font-medium italic whitespace-pre-wrap pointer-events-none">
+                  "{quote}"
+                </p>
+              )}
+              <div className="flex justify-end mt-2 pointer-events-none">
+                <Heart className="w-4 h-4 text-[#A855F7]" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Journal Content */}
@@ -211,17 +395,23 @@ export function JournalNotebook({ date, emotion, setEmotion, editMode, setEditMo
           <div className="absolute -left-12 top-0 text-[#FCA5A5] opacity-80 text-3xl hidden md:block z-0 pointer-events-none">🌸</div>
           <div className="absolute -right-8 bottom-10 text-[#86EFAC] opacity-80 text-4xl hidden md:block z-0 pointer-events-none">🌿</div>
 
-          {!journalData && !isLoading && !editMode && (
+          {!activeJournal && !loadingPhase && !editMode && (
             <div className="py-20 text-center text-muted-foreground italic z-10 relative">
-              No journal entry found for this date. Click Regenerate to write one using AI.
+              No journal entry found for this date. Click Edit to manually write one, or Regenerate to use AI.
             </div>
           )}
 
-          {(journalData || editMode) && (
+          {(activeJournal || editMode) && !loadingPhase && derivedContent && (
             <div className="relative z-10 w-full min-h-[300px]">
               <TiptapEditor 
-                initialContent={content} 
-                onUpdate={(json) => setContent(json)}
+                ref={editorRef}
+                initialContent={derivedContent} 
+                onUpdate={(json) => {
+                  triggerAutoSave({ 
+                    content: json,
+                    originalText: extractTextFromTiptap(json)
+                  }, json);
+                }}
                 editable={editMode}
                 editorSticker={editorSticker}
                 onStickerInserted={() => setEditorSticker(null)}
@@ -250,7 +440,7 @@ export function JournalNotebook({ date, emotion, setEmotion, editMode, setEditMo
         )}
 
         {/* Insights Section */}
-        {journalData && (
+        {activeJournal && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 font-sans">
             <div className="bg-[#F3E8FF] rounded-2xl p-6 relative overflow-hidden">
               <div className="flex items-center gap-2 text-[#6B21A8] font-bold text-xs mb-3">
@@ -285,7 +475,7 @@ export function JournalNotebook({ date, emotion, setEmotion, editMode, setEditMo
         )}
 
         {/* Bottom Favorite Quote */}
-        {journalData && (
+        {activeJournal && (
           <div className="mt-6 bg-[#FAF5FF] rounded-2xl p-6 flex justify-between items-center relative overflow-hidden font-sans border border-[#F3E8FF]">
             <div>
               <div className="flex items-center gap-2 text-[#7A5AF8] font-bold text-xs mb-2">
@@ -299,8 +489,8 @@ export function JournalNotebook({ date, emotion, setEmotion, editMode, setEditMo
             <div className="hidden md:block opacity-80 text-6xl mr-4">☕</div>
           </div>
         )}
-
       </div>
+      )}
     </div>
   );
 }

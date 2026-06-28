@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./global.css";
@@ -29,6 +30,20 @@ export default function RootLayout({
  <html lang="en" suppressHydrationWarning>
  <head>
  <link rel="manifest" href="/manifest.json" />
+ <Script
+   id="theme-script"
+   strategy="beforeInteractive"
+   dangerouslySetInnerHTML={{
+     __html: `
+       try {
+         var savedTheme = localStorage.getItem('theme');
+         if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+           document.documentElement.classList.add('dark');
+         }
+       } catch (e) {}
+     `
+   }}
+ />
  </head>
  <body className={inter.className}>
  <ThemeProvider>

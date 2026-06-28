@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
  DndContext,
  DragOverlay,
@@ -55,7 +55,7 @@ export function KanbanBoard({ initialData }: KanbanBoardProps) {
  const [selectedContact, setSelectedContact] = useState<KanbanContact | null>(null);
  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
- React.useEffect(() => {
+ useEffect(() => {
  setContacts(initialData);
  }, [initialData]);
 

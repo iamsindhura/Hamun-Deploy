@@ -1,53 +1,262 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { JournalCalendar } from "@/components/journal/journal-calendar";
 import { JournalNotebook } from "@/components/journal/journal-notebook";
 import { JournalRightSidebar } from "@/components/journal/journal-right-sidebar";
-import { Plus, Search, Command } from "lucide-react";
-import { getJournalHistory } from "@/app/actions/journal";
-import { format } from "date-fns";
+import { Plus, Search, Command, Heart } from "lucide-react";
+import { getJournalHistory, getJournal, createEmptyJournal, generateJournal, toggleFavorite, generateDailyAnalysis } from "@/app/actions/journal";
+import { format, isSameDay } from "date-fns";
+import { toast } from "sonner";
+import { parseJournalContent } from "@/lib/tiptap-utils";
 
 export function JournalPageClient() {
+  const editorRef = React.useRef<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedEmotion, setSelectedEmotion] = useState("Calm & Focused");
+  const [activeJournal, setActiveJournal] = useState<any>(null);
   const [editMode, setEditMode] = useState(false);
   const [journalHistory, setJournalHistory] = useState<any[]>([]);
   const [editorSticker, setEditorSticker] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "favorites">("all");
+  const [loadingPhase, setLoadingPhase] = useState<string | null>(null);
+  const [showConfirmRegenerate, setShowConfirmRegenerate] = useState(false);
+  const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
 
-  // Fetch history for timeline
-  useEffect(() => {
-    async function loadHistory() {
-      try {
-        const history = await getJournalHistory();
-        setJournalHistory(history);
-      } catch (err) {
-        console.error("Failed to load history", err);
+  const handleRegenerateAnalysis = async () => {
+    if (!activeJournal?.id) return;
+    setIsGeneratingAnalysis(true);
+    try {
+      const res = await generateDailyAnalysis(activeJournal.id);
+      if (res.success && res.journal) {
+        handleUpdateJournal(res.journal);
+        toast.success("AI Analysis Regenerated", { duration: 2000 });
+      } else {
+        if (res.errorType === 'QUOTA_EXCEEDED') {
+          toast.warning("⚠️ Daily AI limit reached. Please try again in a few minutes.", { duration: 4000 });
+        } else {
+          toast.error(res.error || "Failed to regenerate analysis");
+        }
       }
+    } catch (e) {
+      toast.error("Failed to regenerate analysis");
+    } finally {
+      setIsGeneratingAnalysis(false);
     }
+  };
+
+  const loadHistory = async () => {
+    try {
+      const history = await getJournalHistory();
+      setJournalHistory(history);
+    } catch (err) {
+      console.error("Failed to load history", err);
+    }
+  };
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
     loadHistory();
   }, []);
 
+  useEffect(() => {
+    async function loadActive() {
+      try {
+        const j = await getJournal(selectedDate);
+        setActiveJournal(j || null);
+      } catch (err) {
+        console.error("Unable to load journal", err);
+      }
+    }
+    loadActive();
+  }, [selectedDate]);
+
+  const handleCreateNew = async () => {
+    const today = new Date();
+    const existing = journalHistory.find(j => isSameDay(new Date(j.date), today));
+    
+    if (existing) {
+      toast.info("Today's journal already exists. Continuing today's journal.");
+      setSelectedDate(today);
+      return;
+    }
+    
+    try {
+      const res = await createEmptyJournal(today.toISOString());
+      if (res.success && res.journal) {
+        toast.success("New journal created successfully.");
+        await loadHistory();
+        setSelectedDate(today);
+        setEditMode(true);
+      }
+    } catch (error) {
+      toast.error("Unable to create journal. Please try again.");
+    }
+  };
+
+  const handleSetEditMode = async (mode: boolean) => {
+    if (mode && !activeJournal) {
+      // Create empty journal dynamically when they enter Edit Mode on an empty day
+      const res = await createEmptyJournal(selectedDate.toISOString());
+      if (res.success && res.journal) {
+        setActiveJournal(res.journal);
+        await loadHistory();
+      }
+    }
+    setEditMode(mode);
+  };
+
+  const handleEnsureJournal = async (): Promise<string | undefined> => {
+    if (activeJournal?.id) return activeJournal.id;
+    
+    // Create empty journal dynamically
+    const res = await createEmptyJournal(selectedDate.toISOString());
+    if (res.success && res.journal) {
+      setActiveJournal(res.journal);
+      await loadHistory();
+      return res.journal.id;
+    }
+    return undefined;
+  };
+
+  const handleUpdateJournal = (updates: any) => {
+    setActiveJournal((prev: any) => {
+      const updated = prev ? { ...prev, ...updates } : updates;
+      
+      // Optimistically update history for Timeline
+      setJournalHistory((history) => {
+        const exists = history.some(j => j.id === updated.id);
+        if (exists) {
+          return history.map(j => j.id === updated.id ? updated : j);
+        } else {
+          return [updated, ...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        }
+      });
+      
+      return updated;
+    });
+  };
+
+  const handleRegenerate = async () => {
+    setShowConfirmRegenerate(false);
+    setLoadingPhase("Reviewing today's journey...");
+    
+    // Sequence the loading text
+    const phases = [
+      "Preparing Today's Context...",
+      "Understanding Your Photos...",
+      "Listening to Voice Notes...",
+      "Connecting Today's Story...",
+      "Writing Your Reflection...",
+      "Adding Final Touches..."
+    ];
+    let phaseIndex = 0;
+    const interval = setInterval(() => {
+      phaseIndex = (phaseIndex + 1) % phases.length;
+      setLoadingPhase(phases[phaseIndex]);
+    }, 2000);
+
+    try {
+      const mood = activeJournal?.sticker || "Neutral";
+      const response = await generateJournal(mood);
+      if (response.success && response.journal) {
+        handleUpdateJournal(response.journal);
+        toast.success("✨ Journal Created Successfully", {
+          description: "Today's journal has been thoughtfully crafted from your work, focus, relationships, and progress.",
+          duration: 2000,
+        });
+      } else {
+        if (response.errorType === 'QUOTA_EXCEEDED') {
+          toast.warning("⚠️ Daily AI limit reached. Please try again in a few minutes.", {
+            duration: 4000
+          });
+        } else {
+          toast.error(response.error || "Failed to generate journal");
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to generate journal");
+    } finally {
+      clearInterval(interval);
+      setLoadingPhase(null);
+    }
+  };
+
+  const handleToggleFavorite = async (e: React.MouseEvent, journalId: string, currentStatus: boolean) => {
+    e.stopPropagation(); // prevent card click
+    const newStatus = !currentStatus;
+    
+    // Optimistic UI update
+    setJournalHistory(history => history.map(j => j.id === journalId ? { ...j, isFavorite: newStatus } : j));
+    if (activeJournal?.id === journalId) {
+      setActiveJournal({ ...activeJournal, isFavorite: newStatus });
+    }
+
+    try {
+      await toggleFavorite(journalId, newStatus);
+    } catch (err) {
+      // Revert on failure
+      setJournalHistory(history => history.map(j => j.id === journalId ? { ...j, isFavorite: currentStatus } : j));
+      if (activeJournal?.id === journalId) {
+        setActiveJournal({ ...activeJournal, isFavorite: currentStatus });
+      }
+      toast.error("Failed to update favorite status");
+    }
+  };
+
+  const filteredHistory = useMemo(() => {
+    let result = journalHistory;
+    if (filterType === "favorites") {
+      result = result.filter(j => j.isFavorite);
+    }
+    
+    if (!searchQuery.trim()) return result;
+    const query = searchQuery.toLowerCase();
+    
+    return result.filter(j => {
+      const dateStr = format(new Date(j.date), "MMMM d yyyy").toLowerCase();
+      const title = j.insights?.title?.toLowerCase() || "";
+      const text = j.originalText?.toLowerCase() || "";
+      return dateStr.includes(query) || title.includes(query) || text.includes(query);
+    });
+  }, [searchQuery, journalHistory, filterType]);
+
   const mockJournalDates = journalHistory.map(j => new Date(j.date));
 
+  if (!mounted) {
+    return (
+      <div className="flex h-full w-full bg-background overflow-hidden items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-4 border-[#7A5AF8] border-t-transparent animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-[calc(100vh-64px)] w-full bg-background overflow-hidden">
+    <div className="absolute inset-0 flex bg-background overflow-hidden">
       
       {/* Left Sidebar */}
-      <aside className="w-[320px] shrink-0 border-r border-border bg-[#FCFAF6] h-full overflow-y-auto px-5 pt-6 pb-8 space-y-6 flex flex-col hidden lg:flex">
+      <aside className="w-[320px] shrink-0 border-r border-border bg-[#FCFAF6] h-full overflow-hidden px-5 pt-6 flex flex-col hidden lg:flex">
         
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-5">
           <h2 className="text-[13px] font-black tracking-wide text-[#1A1A1A]">MY JOURNALS</h2>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-full text-[12px] font-medium text-[#4B5563] shadow-sm hover:bg-gray-50 transition-colors">
+          <button 
+            onClick={handleCreateNew}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-full text-[12px] font-medium text-[#4B5563] shadow-sm hover:bg-gray-50 transition-colors"
+          >
             <Plus className="w-3.5 h-3.5 text-[#9CA3AF]" />
             New
           </button>
         </div>
 
-        <div className="relative">
+        <div className="relative mb-5 shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
           <input 
             type="text" 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search journals..." 
             className="w-full pl-9 pr-12 py-2.5 bg-white border border-[#E5E7EB] rounded-2xl text-[13px] text-[#1A1A1A] placeholder-[#9CA3AF] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#7A5AF8]/20 focus:border-[#7A5AF8] transition-all"
           />
@@ -56,27 +265,42 @@ export function JournalPageClient() {
           </div>
         </div>
 
-        <JournalCalendar journalDates={mockJournalDates} onDateSelect={setSelectedDate} />
+        <div className="mb-5 shrink-0 flex justify-center w-full">
+          <JournalCalendar 
+            journalDates={mockJournalDates} 
+            selectedDate={activeJournal?.date ? new Date(activeJournal.date) : null} 
+            onDateSelect={setSelectedDate} 
+          />
+        </div>
 
         {/* Filters */}
-        <div className="flex gap-2">
-          <button className="px-3 py-1 text-xs font-medium bg-[#7A5AF8] text-white rounded-full">All</button>
-          <button className="px-3 py-1 text-xs font-medium bg-white border border-border text-muted-foreground rounded-full hover:bg-gray-50 transition-colors">Favorites</button>
-          <button className="px-3 py-1 text-xs font-medium bg-white border border-border text-muted-foreground rounded-full hover:bg-gray-50 transition-colors">Pinned</button>
+        <div className="flex gap-2 mb-4 shrink-0">
+          <button 
+            onClick={() => setFilterType("all")}
+            className={`px-3 py-1 text-xs font-medium rounded-full shadow-sm transition-colors ${filterType === "all" ? "bg-[#7A5AF8] text-white" : "bg-white border border-border text-muted-foreground hover:bg-gray-50"}`}
+          >
+            All
+          </button>
+          <button 
+            onClick={() => setFilterType("favorites")}
+            className={`px-3 py-1 text-xs font-medium rounded-full shadow-sm transition-colors flex items-center gap-1 ${filterType === "favorites" ? "bg-[#7A5AF8] text-white" : "bg-white border border-border text-muted-foreground hover:bg-gray-50"}`}
+          >
+            <Heart className={`w-3 h-3 ${filterType === "favorites" ? "fill-white" : ""}`} /> Favorites
+          </button>
         </div>
 
         {/* Timeline */}
-        <div className="flex-1 overflow-y-auto space-y-3 pb-8">
-          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Timeline</h3>
-          {journalHistory.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">No past journals found.</p>
+        <div className="flex-1 overflow-y-auto space-y-2.5 pb-6 pr-1 custom-scrollbar">
+          <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3 sticky top-0 bg-[#FCFAF6] py-1 z-10">Timeline</h3>
+          {filteredHistory.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">No journals found.</p>
           ) : (
-            journalHistory.map((j) => (
+            filteredHistory.map((j) => (
               <div 
                 key={j.id} 
                 onClick={() => setSelectedDate(new Date(j.date))}
                 className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                  new Date(j.date).toDateString() === selectedDate.toDateString() 
+                  isSameDay(new Date(j.date), selectedDate)
                     ? 'border-[#7A5AF8] bg-white shadow-sm ring-1 ring-[#7A5AF8]/10' 
                     : 'border-transparent bg-white/50 hover:bg-white hover:shadow-sm'
                 }`}
@@ -87,10 +311,24 @@ export function JournalPageClient() {
                   </span>
                   <span className="text-sm">{j.sticker || "📓"}</span>
                 </div>
-                <h4 className="font-serif font-medium text-[#111827] text-sm line-clamp-1 mb-1">
-                  {j.insights?.title || "Journal Entry"}
-                </h4>
-                <p className="text-xs text-muted-foreground line-clamp-2">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h4 className="font-serif font-medium text-[#111827] text-[13px] leading-tight line-clamp-1 flex-1">
+                    {j.insights?.title || "Journal Entry"}
+                  </h4>
+                  <button 
+                    onClick={(e) => handleToggleFavorite(e, j.id, !!j.isFavorite)}
+                    className="shrink-0 p-0.5 hover:bg-gray-100 rounded transition-colors group"
+                  >
+                    <Heart 
+                      className={`w-3.5 h-3.5 transition-all ${
+                        j.isFavorite 
+                          ? "fill-red-500 text-red-500" 
+                          : "text-gray-400 group-hover:text-red-400"
+                      }`} 
+                    />
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
                   {j.originalText?.replace(/<[^>]*>?/gm, '') || "No preview available..."}
                 </p>
               </div>
@@ -102,21 +340,75 @@ export function JournalPageClient() {
       {/* Center Content (Journal Notebook) */}
       <main className="flex-1 flex flex-col items-center justify-start bg-muted/10 overflow-y-auto w-full relative">
         <JournalNotebook 
-          date={selectedDate} 
-          emotion={selectedEmotion}
-          setEmotion={setSelectedEmotion}
+          editorRef={editorRef}
+          selectedDate={selectedDate}
+          activeJournal={activeJournal}
+          onUpdateJournal={handleUpdateJournal}
           editMode={editMode}
-          setEditMode={setEditMode}
+          setEditMode={handleSetEditMode}
           editorSticker={editorSticker}
           setEditorSticker={setEditorSticker}
+          onRegenerate={() => setShowConfirmRegenerate(true)}
+          loadingPhase={loadingPhase}
         />
+        
+        {/* Confirm Regenerate Dialog */}
+        {showConfirmRegenerate && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Regenerate Journal?</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                This will generate a brand new AI journal for today. 
+                Your manually edited journal has already been auto-saved.
+                <br/><br/>
+                Do you want to continue?
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <button 
+                  onClick={() => setShowConfirmRegenerate(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleRegenerate}
+                  className="px-4 py-2 text-sm font-medium text-white bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full transition-colors shadow-sm"
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Right Sidebar */}
       <aside className="w-[320px] shrink-0 border-l border-border bg-[#FCFAF6] h-full overflow-y-auto px-5 pt-6 pb-8 space-y-6 flex flex-col hidden xl:flex">
         <JournalRightSidebar 
-          emotion={selectedEmotion}
+          emotion={activeJournal?.sticker || "Neutral"}
           onStickerClick={(sticker) => setEditorSticker(sticker)}
+          activeJournal={activeJournal}
+          onRegenerateAnalysis={handleRegenerateAnalysis}
+          isGeneratingAnalysis={isGeneratingAnalysis}
+          onAttachmentUploaded={(attachment) => {
+            if (activeJournal) {
+              const currentAttachments = activeJournal.attachments || [];
+              handleUpdateJournal({
+                attachments: [...currentAttachments, attachment]
+              });
+            }
+            // Ensure edit mode is available
+            handleSetEditMode(true);
+          }}
+          onInsertAttachment={(attachment) => {
+            handleSetEditMode(true);
+            setTimeout(() => {
+              if (editorRef.current) {
+                editorRef.current.insertAttachment(attachment);
+              }
+            }, 100);
+          }}
+          onEnsureJournal={handleEnsureJournal}
         />
       </aside>
 

@@ -594,7 +594,7 @@ export async function previewTaskMove(taskId: string, actionType: 'MOVE_TOMORROW
           return { success: true, newStartTime: currentTestStart, newEndTime: new Date(currentTestStart.getTime() + durationMs) };
         }
       }
-      return { success: false, error: "Could not find a free slot in the next 14 days." };
+      return { success: false, error: "No available free slot found for this task." };
     }
 
     return { success: false, error: "Invalid action" };
@@ -687,9 +687,8 @@ export async function scheduleUnscheduledTask(taskId: string) {
  }
  }
  
- return { success: false, error: "Unable to find a free slot. Please manually reschedule." };
- } catch (error) {
- return { success: false, error: "Failed to schedule task" };
+  return { success: false, error: "No available free slot found for this task." };
+  } catch (error) {
+  return { success: false, error: "Failed to schedule task" };
  }
 }
-

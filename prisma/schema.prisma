@@ -30,6 +30,8 @@ model User {
   pushSubs                PushSubscription[]
   sessions                Session[]
   tasks                   Task[]
+  aiMemories              AIMemory[]
+  attachments             Attachment[]
 }
 
 model Account {
@@ -93,6 +95,7 @@ model Contact {
   activities        Activity[]
   user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks             Task[]
+  globalAttachments Attachment[]
 
   @@index([userId, stage])
   @@index([userId, reminderAt])
@@ -131,6 +134,7 @@ model Project {
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks     Task[]
   columns   TaskColumn[]
+  attachments Attachment[]
 
   @@index([userId])
 }
@@ -176,6 +180,7 @@ model Task {
   contact                  Contact?       @relation(fields: [contactId], references: [id])
   project                  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments              Attachment[]
 
   @@index([projectId])
   @@index([columnId])
@@ -228,10 +233,36 @@ model Journal {
   isFavorite        Boolean          @default(false)
   isPinned          Boolean          @default(false)
   tags              String[]
+  subtitle          String?
+  themeColor        String?
+  musicMood         String?
+  highlights        String[]
   attachments       Attachment[]
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   versions          JournalVersion[]
 
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model AIMemory {
+  id                 String   @id @default(cuid())
+  userId             String
+  date               DateTime
+  highlights         String[]
+  achievements       String[]
+  challenges         String[]
+  lessons            String[]
+  peopleMentioned    String[]
+  projectsMentioned  String[]
+  mood               String?
+  moodScore          Int?
+  productivityTrend  String?
+  focusTrend         String?
+  relationshipTrend  String?
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   @@unique([userId, date])
   @@index([userId, date])
 }
@@ -249,14 +280,35 @@ model JournalVersion {
 }
 
 model Attachment {
-  id        String   @id @default(cuid())
-  journalId String
-  url       String
-  type      String
-  createdAt DateTime @default(now())
-  journal   Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String
+  journalId   String?
+  taskId      String?
+  projectId   String?
+  contactId   String?
+  type        String
+  filename    String
+  storagePath String
+  mimeType    String
+  size        Int?
+  duration    Int?
+  pages       Int?
+  thumbnail   String?
+  summary     String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  journal     Journal? @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  task        Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([journalId])
+  @@index([taskId])
+  @@index([projectId])
+  @@index([contactId])
 }
 
 enum Stage {

@@ -39,13 +39,6 @@ export function TaskReminderProvider({ children }: { children: React.ReactNode }
  permissionRequested.current = true;
  }
 
- // 2. ADD TEST NOTIFICATION FUNCTION
- (window as any).testNotification = () => {
- new Notification("HAMUN Test", {
- body: "Notifications are working."
- });
- console.log("Test notification fired.");
- };
  }, []);
 
  useEffect(() => {
@@ -106,15 +99,6 @@ export function TaskReminderProvider({ children }: { children: React.ReactNode }
 
  return (
  <TaskReminderContext.Provider value={{ setGlobalTasks: setTasks }}>
- {/* TEMPORARY TEST BUTTON (Dev Only) */}
- {process.env.NODE_ENV === "development" && (
- <button 
- onClick={() => (window as any).testNotification?.()}
- className="fixed bottom-4 right-4 z-50 bg-slate-800 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold hover:bg-slate-700 opacity-50 hover:opacity-100 transition-opacity"
- >
- Test Notification
- </button>
- )}
  {children}
  </TaskReminderContext.Provider>
  );

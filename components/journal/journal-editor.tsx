@@ -25,10 +25,32 @@ interface JournalEditorProps {
 export function JournalEditor({ journal: initialJournal, isHistorical = false }: JournalEditorProps) {
   const [journal, setJournal] = useState(initialJournal);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [content, setContent] = useState("");
   const [selectedMood, setSelectedMood] = useState("Good");
+
+  const loadingStages = [
+    "Preparing Today's Context...",
+    "Analyzing Images...",
+    "Reading Documents...",
+    "Understanding Voice Notes...",
+    "Connecting Your Day...",
+    "Writing Your Reflection...",
+    "Final Touches..."
+  ];
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isGenerating) {
+      setLoadingStageIndex(0);
+      interval = setInterval(() => {
+        setLoadingStageIndex(prev => (prev < loadingStages.length - 1 ? prev + 1 : prev));
+      }, 1500);
+    }
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   // Read-only mode by default for historical journals
   useEffect(() => {
@@ -141,8 +163,8 @@ export function JournalEditor({ journal: initialJournal, isHistorical = false }:
     return (
       <div className="p-12 rounded-2xl bg-card border border-border shadow-sm flex flex-col items-center text-center justify-center min-h-[400px]">
         <Loader2 className="h-10 w-10 text-purple-500 animate-spin mb-4" />
-        <h3 className="text-lg font-bold text-foreground">Reflecting on your day...</h3>
-        <p className="text-muted-foreground text-sm mt-2">Analyzing your tasks, deep work, and connections.</p>
+        <h3 className="text-lg font-bold text-foreground">{loadingStages[loadingStageIndex]}</h3>
+        <p className="text-muted-foreground text-sm mt-2">Integrating multi-modal context into your daily reflection.</p>
       </div>
     );
   }
