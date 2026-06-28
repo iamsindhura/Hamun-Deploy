@@ -37,7 +37,7 @@ export function Toolbar({ editor }: ToolbarProps) {
     setIsUploading(false);
     
     if (result.success && result.url) {
-      editor.chain().focus().setImage({ src: result.url }).run();
+      editor.chain().focus().insertContent({ type: 'customImage', attrs: { src: result.url } }).run();
     } else {
       alert(result.error || "Failed to upload image");
     }

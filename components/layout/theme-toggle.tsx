@@ -21,7 +21,7 @@ export function ThemeToggle() {
     setMounted(true);
   }, []);
 
-  const handleSetTheme = async (newTheme: string) => {
+  const handleSetTheme = async (newTheme: "light" | "dark" | "system") => {
     setTheme(newTheme);
     await updateTheme(newTheme.toUpperCase());
   };
