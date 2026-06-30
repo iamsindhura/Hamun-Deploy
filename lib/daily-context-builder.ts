@@ -21,6 +21,15 @@ export interface DailyContext {
     highLevelNarrative: string;
   };
   predictedEmotion: string;
+  calculatedScores?: {
+    taskScore: number;
+    deepWorkScore: number;
+    timeManagementScore: number;
+    crmScore: number;
+    habitScore: number;
+    reflectionScore: number;
+    overallScore: number;
+  };
 }
 
 export class DailyContextBuilder {
@@ -117,6 +126,91 @@ export class DailyContextBuilder {
       predictedEmotion = "Good";
     }
 
+    // 5. Fetch Habit and Timeboxing specific data for score calculation
+    // Habits are Tasks with taskType = HABIT.
+    const habitsTotal = await prisma.task.count({
+      where: { userId, taskType: "HABIT", createdAt: { gte: startOfDay, lte: endOfDay } }
+    });
+    const habitsCompleted = await prisma.task.count({
+      where: { userId, taskType: "HABIT", completedAt: { gte: startOfDay, lte: endOfDay } }
+    });
+
+    // Timeboxing tasks are Tasks with startTime and endTime defined.
+    const timeboxTotal = await prisma.task.count({
+      where: { userId, startTime: { not: null }, endTime: { not: null }, createdAt: { gte: startOfDay, lte: endOfDay } }
+    });
+    const timeboxCompleted = await prisma.task.count({
+      where: { userId, startTime: { not: null }, endTime: { not: null }, completedAt: { gte: startOfDay, lte: endOfDay } }
+    });
+
+    // --- Deterministic Scoring Engine ---
+    // Task Score: (tasksCompleted / max(tasksCreated, 1)) * 100. If no tasks created, default to 50 if reflection/journal exists (handled under reflection).
+    // Or simpler: base it on tasks Completed vs Tasks Created today. Let's make it robust:
+    // If no tasks created, but tasks completed > 0 (e.g. from backlog), score is 100. If both 0, default to 50 (neutral base).
+    let taskScore = 50;
+    if (tasksCreated > 0) {
+      taskScore = Math.round((tasksCompleted / tasksCreated) * 100);
+    } else if (tasksCompleted > 0) {
+      taskScore = 100;
+    }
+    taskScore = Math.max(0, Math.min(100, taskScore));
+
+    // Deep Work Score: 1 session and 45 minutes of focus counts as solid (70 points).
+    // Let's scale: totalFocusMinutes / 90 * 100. Cap at 100. If 0 focus sessions, score is 20.
+    let deepWorkScore = 20;
+    if (focusSessionsCount > 0 && totalFocusMinutes > 0) {
+      deepWorkScore = Math.min(100, Math.round((totalFocusMinutes / 90) * 100));
+      // Ensure we reward at least 40 if they did a focus block
+      deepWorkScore = Math.max(40, deepWorkScore);
+    }
+
+    // Time Management Score: Based on timebox adherence.
+    // If no timeboxes created, default to 60 (steady default).
+    let timeManagementScore = 60;
+    if (timeboxTotal > 0) {
+      timeManagementScore = Math.round((timeboxCompleted / timeboxTotal) * 100);
+    }
+
+    // CRM Score: Based on pipeline moves and CRM activities.
+    // Scale: (pipelineMoves * 40) + (activities.length * 10). Cap at 100. If 0 moves/activities, score is 30.
+    let crmScore = 30;
+    if (pipelineMoves > 0 || activities.length > 0) {
+      crmScore = Math.min(100, (pipelineMoves * 50) + (activities.length * 15));
+      crmScore = Math.max(40, crmScore);
+    }
+
+    // Habit Score: Completed habits vs total habits today.
+    // If no habits created, default to 70 (balanced consistency default).
+    let habitScore = 70;
+    if (habitsTotal > 0) {
+      habitScore = Math.round((habitsCompleted / habitsTotal) * 100);
+    }
+
+    // Reflection Score: Journal writing completion itself.
+    // Since this context building occurs for today, completing the journal is a strong reflection act (90 points base).
+    // Default to 85.
+    const reflectionScore = 85;
+
+    // Overall Score Calculation:
+    // Tasks: 30%, Deep Work: 20%, Timeboxing: 15%, CRM: 15%, Habits: 10%, Reflection: 10%
+    const rawOverallScore = (taskScore * 0.30) +
+                            (deepWorkScore * 0.20) +
+                            (timeManagementScore * 0.15) +
+                            (crmScore * 0.15) +
+                            (habitScore * 0.10) +
+                            (reflectionScore * 0.10);
+    const overallScore = Math.max(20, Math.min(100, Math.round(rawOverallScore)));
+
+    const calculatedScores = {
+      taskScore,
+      deepWorkScore,
+      timeManagementScore,
+      crmScore,
+      habitScore,
+      reflectionScore,
+      overallScore
+    };
+
     return {
       raw: {
         contactsCreated,
@@ -129,6 +223,7 @@ export class DailyContextBuilder {
         totalFocusMinutes,
         focusSessionsCount
       },
+      calculatedScores,
       semantics: {
         productivitySummary,
         relationshipSummary,
@@ -141,3 +236,4 @@ export class DailyContextBuilder {
     };
   }
 }
+

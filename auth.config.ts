@@ -4,6 +4,8 @@ import Google from "next-auth/providers/google";
 export const authConfig = {
   providers: [
     Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
       authorization: {
         params: {
           prompt: "consent select_account",
@@ -21,9 +23,16 @@ export const authConfig = {
 
       if (isAuthPage) {
         if (isLoggedIn) {
-          return Response.redirect(new URL("/", nextUrl));
+          return Response.redirect(new URL("/dashboard", nextUrl));
         }
         return true;
+      }
+
+      if (nextUrl.pathname === "/") {
+        if (isLoggedIn) {
+          return Response.redirect(new URL("/dashboard", nextUrl));
+        }
+        return true; // Allow public access to landing page
       }
 
       if (!isLoggedIn) {

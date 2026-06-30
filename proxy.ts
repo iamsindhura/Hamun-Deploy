@@ -9,6 +9,6 @@ export default auth;
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|logo/hamun-logo.png|logo/logo-1.png|logo/login-logo.png|logo-icon.png|logo-full.png).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|logo/hamun-logo.png|logo/logo-1.png|logo/login-logo.png|logo-icon.png|logo-full.png|api/test-ai|api/test-cloudflare|api/test-router).*)",
   ],
 };

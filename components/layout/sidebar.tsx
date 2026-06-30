@@ -47,8 +47,8 @@ const crmRoutes = [
     {
         label: "Dashboard",
         icon: LayoutDashboard,
-        href: "/",
-        active: (pathname: string) => pathname === "/",
+        href: "/dashboard",
+        active: (pathname: string) => pathname === "/dashboard",
     },
     {
         label: "Contacts",
