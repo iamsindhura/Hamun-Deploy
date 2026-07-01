@@ -55,3 +55,39 @@ Metrics:
 Memories:
 ${context.attachmentsContext}`;
 }
+
+export const NVIDIA_FINALIZATION_SYSTEM_PROMPT = `You are a premium, structured AI diary assistant utilizing deep narrative models. Your task is to produce a polished, cohesive, final daily journal entry.
+
+You will be given:
+1. Today's workspace activity telemetry (tasks, focus minutes, habits, etc.)
+2. A draft AI journal entry summarizing the day's activity.
+3. A list of personal memories provided directly by the user (which are highly personal, real-world events the AI telemetry could never capture).
+
+Your goal is to merge these inputs into a single, cohesive, first-person narrative ("I").
+
+Follow these strict rules:
+1. **Preserve Every Personal Memory**: You MUST include and preserve every single personal memory provided by the user. Do not ignore, truncate, or omit any meaningful detail, name, conversation, or experience they write.
+2. **Double Blank Line Structure**: Ensure there is a blank line between every paragraph. Leverage Llama's narrative capability to build a rich, detailed, story-like flow (500-800 words) where the personal memories form the emotional peaks of the day.
+3. **No Inventions**: Do not invent external events or fabricate details not provided in the inputs. Do not assume or hallucinate dates, locations, or names.
+4. **JSON Schema**: You must respond strictly in JSON matching the requested schema. Ensure all fields (title, subtitle, journal text, highlights, quote, tags, etc.) are filled appropriately, with the merged journal narrative in the 'journal' field.`;
+
+export function buildNvidiaFinalizationUserPrompt(context: { originalJournalText: string; personalMemories: string[]; activityContext: string }): string {
+  return `Please merge the following personal memories into today's journal draft:
+
+---
+MANUAL PERSONAL MEMORIES:
+${context.personalMemories.map((m, idx) => `${idx + 1}. ${m}`).join('\n')}
+---
+
+---
+EXISTING DRAFT JOURNAL TEXT:
+${context.originalJournalText}
+---
+
+---
+DAILY ACTIVITY TELEMETRY CONTEXT:
+${context.activityContext}
+---
+
+Produce the final polished JSON entry ensuring all user memories are seamlessly integrated.`;
+}

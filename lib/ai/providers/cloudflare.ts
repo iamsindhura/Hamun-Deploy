@@ -3,7 +3,12 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { AIProvider } from "../types";
 import { getCloudflareConfig } from "../env";
 import { withTimeout } from "../utils";
-import { CLOUDFLARE_SYSTEM_PROMPT, buildCloudflareUserPrompt } from "../prompts/cloudflare";
+import { 
+  CLOUDFLARE_SYSTEM_PROMPT, 
+  buildCloudflareUserPrompt, 
+  CLOUDFLARE_FINALIZATION_SYSTEM_PROMPT, 
+  buildCloudflareFinalizationUserPrompt 
+} from "../prompts/cloudflare";
 import { z } from "zod";
 
 const CLOUDFLARE_INTERMEDIATE_SCHEMA = z.object({
@@ -67,8 +72,15 @@ export const cloudflareProvider: AIProvider = {
     // Cloudflare Workers AI Llama-3.1-8B fast model
     const model = openai.chat("@cf/meta/llama-3.1-8b-instruct-fast");
 
-    const system = prompt.context ? CLOUDFLARE_SYSTEM_PROMPT : prompt.systemPrompt;
-    const userPrompt = prompt.context ? buildCloudflareUserPrompt(prompt.context) : prompt.userPrompt;
+    const isFinalization = !!(prompt.context && 'personalMemories' in prompt.context);
+    
+    const system = isFinalization
+      ? CLOUDFLARE_FINALIZATION_SYSTEM_PROMPT
+      : (prompt.context ? CLOUDFLARE_SYSTEM_PROMPT : prompt.systemPrompt);
+      
+    const userPrompt = isFinalization
+      ? buildCloudflareFinalizationUserPrompt(prompt.context)
+      : (prompt.context ? buildCloudflareUserPrompt(prompt.context) : prompt.userPrompt);
 
     return withTimeout(async (signal) => {
       // If called with the complex journal schema, internally generate a simpler one

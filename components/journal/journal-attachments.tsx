@@ -39,9 +39,10 @@ interface JournalAttachmentsProps {
   onUploadComplete?: (attachment: Attachment) => void;
   onEnsureJournal?: () => Promise<string | undefined>;
   onInsertAttachment?: (attachment: Attachment) => void;
+  isToday?: boolean;
 }
 
-export function JournalAttachments({ journalId, initialAttachments = [], onUploadComplete, onEnsureJournal, onInsertAttachment }: JournalAttachmentsProps) {
+export function JournalAttachments({ journalId, initialAttachments = [], onUploadComplete, onEnsureJournal, onInsertAttachment, isToday = true }: JournalAttachmentsProps) {
   const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -170,26 +171,28 @@ export function JournalAttachments({ journalId, initialAttachments = [], onUploa
         />
 
         {/* Action Buttons */}
-        <div className="p-3">
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              disabled={isUploading}
-              onClick={() => handleFileSelect("IMAGE")}
-              className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors border border-dashed border-gray-200 disabled:opacity-50"
-            >
-              <ImageIcon className="w-5 h-5 text-[#4B5563]" />
-              <span className="text-[11px] font-bold text-[#4B5563] tracking-wider uppercase">Image</span>
-            </button>
-            <button 
-              disabled={isUploading}
-              onClick={() => handleFileSelect("VOICE")}
-              className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors border border-dashed border-gray-200 disabled:opacity-50"
-            >
-              <Mic className="w-5 h-5 text-[#4B5563]" />
-              <span className="text-[11px] font-bold text-[#4B5563] tracking-wider uppercase">Voice</span>
-            </button>
+        {isToday && (
+          <div className="p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                disabled={isUploading}
+                onClick={() => handleFileSelect("IMAGE")}
+                className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors border border-dashed border-gray-200 disabled:opacity-50"
+              >
+                <ImageIcon className="w-5 h-5 text-[#4B5563]" />
+                <span className="text-[11px] font-bold text-[#4B5563] tracking-wider uppercase">Image</span>
+              </button>
+              <button 
+                disabled={isUploading}
+                onClick={() => handleFileSelect("VOICE")}
+                className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors border border-dashed border-gray-200 disabled:opacity-50"
+              >
+                <Mic className="w-5 h-5 text-[#4B5563]" />
+                <span className="text-[11px] font-bold text-[#4B5563] tracking-wider uppercase">Voice</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {isUploading && (
           <div className="px-5 pb-4">
@@ -210,7 +213,7 @@ export function JournalAttachments({ journalId, initialAttachments = [], onUploa
           <div className="text-center py-8 px-4 border-t border-gray-100">
             <UploadCloud className="w-8 h-8 text-gray-300 mx-auto mb-2" />
             <p className="text-sm text-gray-500 font-medium">No attachments yet.</p>
-            <p className="text-xs text-gray-400 mt-1">Upload context for AI Analysis</p>
+            {isToday && <p className="text-xs text-gray-400 mt-1">Upload context for AI Analysis</p>}
           </div>
         )}
 
@@ -221,12 +224,14 @@ export function JournalAttachments({ journalId, initialAttachments = [], onUploa
               <div className="text-[13px] text-gray-500 font-medium">
                 {attachments.length} attachment{attachments.length !== 1 ? 's' : ''} • {formatBytes(totalSize)}
               </div>
-              <button 
-                onClick={clearAll}
-                className="flex items-center gap-1.5 text-[13px] font-medium text-red-500 hover:text-red-600 transition-colors"
-              >
-                Clear all <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {isToday && (
+                <button 
+                  onClick={clearAll}
+                  className="flex items-center gap-1.5 text-[13px] font-medium text-red-500 hover:text-red-600 transition-colors"
+                >
+                  Clear all <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* List */}
@@ -321,18 +326,20 @@ export function JournalAttachments({ journalId, initialAttachments = [], onUploa
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={() => deleteAttachment(att.id)}
-                        className="text-[#EF4444] hover:text-red-600 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {isToday && (
+                        <button 
+                          onClick={() => deleteAttachment(att.id)}
+                          className="text-[#EF4444] hover:text-red-600 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                     </div>
 
                     {/* Manual Insert Button row */}
-                    {onInsertAttachment && (
+                    {isToday && onInsertAttachment && (
                       <div className="mt-3 pt-2 border-t border-gray-50 flex justify-end">
                         <button 
                           onClick={() => onInsertAttachment(att)}
@@ -353,7 +360,9 @@ export function JournalAttachments({ journalId, initialAttachments = [], onUploa
               <Sparkles className="w-4 h-4 text-[#7A5AF8] shrink-0 mt-0.5" />
               <div>
                 <p className="text-[12px] font-bold text-[#5B21B6] leading-snug">
-                  These attachments will be used for AI analysis and journal generation.
+                  {isToday 
+                    ? "These attachments will be used for AI analysis and journal generation."
+                    : "These attachments are used for today's AI insights."}
                 </p>
                 <p className="text-[11px] text-[#7C3AED] mt-0.5">
                   You can click on any attachment to preview it.

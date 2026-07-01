@@ -158,6 +158,10 @@ export async function generateJournal(moodFallback: string) {
       include: { attachments: true }
     });
     
+    if (todayJournal?.isFinalized) {
+      return { success: false, error: "This journal has already been permanently finalized." };
+    }
+    
     // Extract captions from existing Tiptap JSON if any
     const existingContent = todayJournal?.content as any;
     const captionsMap = new Map<string, string>();
@@ -193,13 +197,15 @@ export async function generateJournal(moodFallback: string) {
       attachmentsContext,
     });
 
+    const journalOnlySchema = JOURNAL_SCHEMA.omit({ aiAnalysis: true });
+
     // 2. Generate Object with Strict Zod Schema
     let object: any;
     try {
       object = await AiService.generateStructuredData({
         systemPrompt: systemPrompt,
         userPrompt: userPrompt,
-        schema: JOURNAL_SCHEMA,
+        schema: journalOnlySchema,
         failProviders,
         context: {
           predictedEmotion: context.predictedEmotion,
@@ -234,20 +240,7 @@ export async function generateJournal(moodFallback: string) {
             journalTags: ["mock", "development", "productivity"],
             themeColor: "#7A5AF8",
             musicMood: "Lo-Fi Beats",
-            highlights: ["Completed AI Integration", "Cleared inbox"],
-            aiAnalysis: {
-              score: context.calculatedScores ? context.calculatedScores.overallScore : 85,
-              label: "Excellent Momentum",
-              executiveSummary: "A highly productive day with strong focus on core tasks.",
-              bulletPoints: [
-                { icon: "🎯", text: "Successfully completed key project milestones." },
-                { icon: "🤝", text: "Nurtured important client relationships." },
-                { icon: "⚡", text: "Maintained strong energy throughout the day." },
-                { icon: "📈", text: "Pipeline value increased steadily." },
-                { icon: "🌱", text: "Personal growth aligned with business goals." }
-              ],
-              recommendation: "Continue this momentum into tomorrow's planning session."
-            }
+            highlights: ["Completed AI Integration", "Cleared inbox"]
           };
         } else {
           console.log("✓ Gemini Quota Exceeded");
@@ -335,10 +328,9 @@ export async function generateJournal(moodFallback: string) {
       })
     };
 
-    // Force the pre-calculated scores into the AI analysis object to guarantee no provider alterations
-    if (object.aiAnalysis && context.calculatedScores) {
-      object.aiAnalysis.score = context.calculatedScores.overallScore;
-    }
+    // Retrieve pre-existing AI Analysis if it exists in the database to preserve it
+    const existingInsights = todayJournal?.insights as any;
+    const existingAiAnalysis = existingInsights?.aiAnalysis || null;
 
     // Prepare draft response for frontend
     const draftJournal = {
@@ -361,7 +353,7 @@ export async function generateJournal(moodFallback: string) {
         tomorrowIntention: object.tomorrowIntention,
         gratitude: object.gratitude,
         imagePrompts: object.imagePrompts,
-        aiAnalysis: object.aiAnalysis,
+        aiAnalysis: existingAiAnalysis, // Preserve existing insights!
       },
     };
 
@@ -432,6 +424,9 @@ export async function getJournal(date: Date) {
         userId: session.user.id,
         date: startOfDay
       }
+    },
+    include: {
+      personalMemories: true
     }
   });
 
@@ -469,7 +464,8 @@ export async function generateDailyAnalysis(journalId: string) {
   const userId = session.user.id;
 
   const dbJournal = await prisma.journal.findUnique({
-    where: { id: journalId, userId }
+    where: { id: journalId, userId },
+    include: { attachments: true }
   });
 
   if (!dbJournal) {
@@ -478,63 +474,74 @@ export async function generateDailyAnalysis(journalId: string) {
 
   // 1. Gather comprehensive context
   const context = await DailyContextBuilder.buildContext(userId, new Date(dbJournal.date));
-  const systemPrompt = `You are HAMUN, an elite executive coach and AI Life Operating System.
-Your task is to analyze the user's daily performance based on CRM activity, Tasks, and Deep Work.
-Provide a highly concise, insightful Executive Briefing.
-No paragraphs. Maximum 5-8 bullet points.
-Never dump raw numbers; explain what the numbers mean for their momentum and growth.`;
 
-  const scores = context.calculatedScores || {
-    overallScore: 50,
-    taskScore: 50,
-    deepWorkScore: 50,
-    timeManagementScore: 50,
-    crmScore: 50,
-    habitScore: 50,
-    reflectionScore: 50
+  // Dev simulation of failures
+  let failProviders: string[] = [];
+  if (process.env.NODE_ENV === "development") {
+    try {
+      const headersList = await headers();
+      const referer = headersList.get("referer");
+      if (referer) {
+        const url = new URL(referer);
+        const failParam = url.searchParams.get("fail");
+        if (failParam) {
+          failProviders = failParam.split(",").map(p => p.trim().toLowerCase());
+          console.log(`[Dev Failure Simulator] Simulating failures for: ${failProviders.join(", ")}`);
+        }
+      }
+    } catch (err) {
+      console.warn("[Dev Failure Simulator] Failed to check referer headers", err);
+    }
+  }
+
+  // Extract captions from existing Tiptap JSON if any
+  const existingContent = dbJournal.content as any;
+  const captionsMap = new Map<string, string>();
+  if (existingContent && existingContent.content) {
+    const walk = (nodes: any[]) => {
+      for (const node of nodes) {
+        if (node.attrs?.attachmentId && node.attrs?.caption) {
+          captionsMap.set(node.attrs.attachmentId, node.attrs.caption);
+        }
+        if (node.content) walk(node.content);
+      }
+    };
+    walk(existingContent.content);
+  }
+
+  const attachmentsContext = dbJournal.attachments?.map(att => {
+    let text = `Memory / Note captured today:\n`;
+    if (att.summary) text += `- Details: ${att.summary}\n`;
+    const userCaption = captionsMap.get(att.id);
+    if (userCaption) text += `- User's additional thoughts: "${userCaption}"\n`;
+    return text;
+  }).join('\n\n') || "No special memories captured today.";
+
+  const latestJournalText = dbJournal.content 
+    ? extractTextFromTiptap(dbJournal.content as any) 
+    : dbJournal.originalText;
+
+  const { INSIGHTS_ONLY_SYSTEM_PROMPT, INSIGHTS_ONLY_SCHEMA, buildInsightsOnlyUserPrompt } = await import("@/lib/ai/prompts/insights-prompt");
+
+  // Construct conforming prompt context matching JournalPromptContext
+  const promptContext = {
+    predictedEmotion: context.predictedEmotion,
+    semantics: context.semantics,
+    raw: context.raw,
+    calculatedScores: context.calculatedScores,
+    attachmentsContext,
   };
 
-  const userPrompt = `
-Deterministic Daily Scores (You MUST return the pre-calculated Overall Score exactly in the 'score' field of the JSON):
-- Pre-calculated Overall Score: ${scores.overallScore}
-- Task Score: ${scores.taskScore}
-- Deep Work Score: ${scores.deepWorkScore}
-- Time Management Score: ${scores.timeManagementScore}
-- CRM Score: ${scores.crmScore}
-- Habit Score: ${scores.habitScore}
-- Reflection Score: ${scores.reflectionScore}
-
-Semantic Summary of the Day:
-- Productivity: ${context.semantics.productivitySummary}
-- Relationships: ${context.semantics.relationshipSummary}
-- Focus: ${context.semantics.focusSummary}
-- Workload: ${context.semantics.workloadSummary}
-
-Raw Metrics (Analyze this without repeating the numbers directly):
-- CRM: ${context.raw.pipelineMoves} pipeline moves
-- Tasks: ${context.raw.tasksCompleted} completed
-- Focus Sessions: ${context.raw.focusSessionsCount} (${context.raw.totalFocusMinutes} minutes)
-`;
+  const systemPrompt = INSIGHTS_ONLY_SYSTEM_PROMPT;
+  const userPrompt = buildInsightsOnlyUserPrompt(promptContext, latestJournalText);
 
   let aiAnalysis: any;
   try {
     const object = await AiService.generateStructuredData({
       systemPrompt,
       userPrompt,
-      schema: z.object({
-        aiAnalysis: z.object({
-          score: z.number().describe("Must be the EXACT pre-calculated Overall Score provided in the prompt"),
-          label: z.string().describe("A 2-3 word label for the score (e.g. 'Excellent Momentum')"),
-          executiveSummary: z.string().describe("A concise executive summary of the day's professional progress"),
-          bulletPoints: z.array(
-            z.object({
-              icon: z.string().describe("A single emoji like 📈, 🎯, ⚡, 🤝, or 🌱"),
-              text: z.string().describe("An insightful inference about the user's progress. No raw numbers.")
-            })
-          ).min(5).max(8).describe("5 to 8 bullet points analyzing CRM, Tasks, and Deep Work"),
-          recommendation: z.string().describe("One actionable recommendation for tomorrow")
-        }).describe("The professional executive coaching analysis based on today's metrics")
-      })
+      schema: INSIGHTS_ONLY_SCHEMA,
+      failProviders
     }) as any;
     aiAnalysis = object.aiAnalysis;
     if (aiAnalysis && context.calculatedScores) {
@@ -551,7 +558,7 @@ Raw Metrics (Analyze this without repeating the numbers directly):
       if (process.env.ENABLE_AI_MOCK_DATA === 'true') {
         console.log("✓ Using Mock Response for AI Briefing (Development)");
         aiAnalysis = {
-          score: 85,
+          score: context.calculatedScores ? context.calculatedScores.overallScore : 85,
           label: "Excellent Momentum",
           executiveSummary: "A highly productive day with strong focus on core tasks.",
           bulletPoints: [
@@ -590,4 +597,289 @@ Raw Metrics (Analyze this without repeating the numbers directly):
   });
 
   return { success: true, journal: { ...updatedJournal, date: updatedJournal.date.toISOString() } };
+}
+
+const JOURNAL_FINALIZATION_SYSTEM_PROMPT = `You are a premium, empathetic AI journaling assistant. Your task is to produce a polished, cohesive, final daily journal entry. 
+
+You will be given:
+1. Today's workspace activity telemetry (tasks, focus minutes, habits, etc.)
+2. A draft AI journal entry summarizing the day's activity.
+3. A list of personal memories provided directly by the user (which are highly personal, real-world events the AI telemetry could never capture).
+
+Your goal is to intelligently merge the personal memories into the story of the draft journal to create a single, continuous, elegant, first-person narrative ("I").
+
+Follow these strict rules:
+1. **Preserve Every Personal Memory**: You MUST include and preserve every single personal memory provided by the user. Do not ignore, truncate, or omit any meaningful detail, name, conversation, or experience they write.
+2. **Natural Merging & Transitions**: Integrate these memories naturally into the timeline of the day's events. Smooth out transitions between telemetry activity (like working on a project) and real-life moments (like having dinner with family or meeting a friend).
+3. **No Inventions**: Do not invent external events or fabricate details not provided in the inputs. Do not assume or hallucinate dates, locations, or names.
+4. **Writing Quality & Emotional Flow**: Elevate the writing to feel personal, reflective, and premium. Match the emotional tone and flow of the personal memories while keeping the style consistent.
+5. **JSON Schema**: You must respond strictly in JSON matching the requested schema. Ensure all fields (title, subtitle, journal text, highlights, quote, tags, etc.) are filled appropriately, with the merged journal narrative in the 'journal' field.`;
+
+function buildFinalizationUserPrompt(params: {
+  originalJournalText: string;
+  personalMemories: string[];
+  activityContext: string;
+}) {
+  return `Please merge the following personal memories into today's journal draft:
+
+---
+MANUAL PERSONAL MEMORIES:
+${params.personalMemories.map((m, idx) => `${idx + 1}. ${m}`).join('\n')}
+---
+
+---
+EXISTING DRAFT JOURNAL TEXT:
+${params.originalJournalText}
+---
+
+---
+DAILY ACTIVITY TELEMETRY CONTEXT:
+${params.activityContext}
+---
+
+Produce the final polished JSON entry ensuring all user memories are seamlessly integrated.`;
+}
+
+export async function savePersonalMemories(journalId: string, memories: string[]) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  
+  try {
+    const j = await prisma.journal.findUnique({
+      where: { id: journalId, userId: session.user.id }
+    });
+    if (!j) return { success: false, error: "Journal not found" };
+    if (j.isFinalized) return { success: false, error: "Journal is finalized and cannot be modified." };
+
+    await prisma.$transaction([
+      prisma.personalMemory.deleteMany({ where: { journalId } }),
+      prisma.personalMemory.createMany({
+        data: memories.filter(c => c.trim() !== "").map(content => ({
+          journalId,
+          content: content.trim()
+        }))
+      })
+    ]);
+
+    const updatedJournal = await prisma.journal.findUnique({
+      where: { id: journalId },
+      include: { personalMemories: true }
+    });
+
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/journal");
+
+    return { 
+      success: true, 
+      journal: updatedJournal ? { 
+        ...updatedJournal, 
+        date: updatedJournal.date.toISOString() 
+      } : null 
+    };
+  } catch (err: any) {
+    console.error("Failed to save personal memories", err);
+    return { success: false, error: err.message || "Failed to save personal memories" };
+  }
+}
+
+export async function finalizeJournalAction(journalId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const userId = session.user.id;
+
+  try {
+    const todayJournal = await prisma.journal.findUnique({
+      where: { id: journalId, userId },
+      include: { personalMemories: true, attachments: true }
+    });
+
+    if (!todayJournal) return { success: false, error: "Journal not found" };
+    if (todayJournal.isFinalized) return { success: false, error: "Journal is already finalized." };
+
+    const memories = todayJournal.personalMemories.map(m => m.content);
+    if (memories.length === 0) {
+      return { success: false, error: "Please add at least one personal memory before finalizing." };
+    }
+
+    // 1. Build context using DailyContextBuilder
+    const now = new Date(todayJournal.date);
+    const context = await DailyContextBuilder.buildContext(userId, now);
+
+    // Extract captions from existing Tiptap JSON if any
+    const existingContent = todayJournal.content as any;
+    const captionsMap = new Map<string, string>();
+    if (existingContent && existingContent.content) {
+      const walk = (nodes: any[]) => {
+        for (const node of nodes) {
+          if (node.attrs?.attachmentId && node.attrs?.caption) {
+            captionsMap.set(node.attrs.attachmentId, node.attrs.caption);
+          }
+          if (node.content) walk(node.content);
+        }
+      };
+      walk(existingContent.content);
+    }
+
+    const attachmentsContext = todayJournal.attachments?.map(att => {
+      let text = `Attachment:\n`;
+      if (att.summary) text += `- Details: ${att.summary}\n`;
+      const userCaption = captionsMap.get(att.id);
+      if (userCaption) text += `- User thoughts: "${userCaption}"\n`;
+      return text;
+    }).join('\n\n') || "";
+
+    const activityContext = `
+Productivity Summary: ${context.semantics.productivitySummary}
+Workload Summary: ${context.semantics.workloadSummary}
+Consistency Summary: ${context.semantics.consistencySummary}
+Focus Summary: ${context.semantics.focusSummary}
+Relationship Summary: ${context.semantics.relationshipSummary}
+${attachmentsContext}
+    `.trim();
+
+    // 2. Generate merged journal using AI service
+    const { AiService } = await import("@/lib/ai/service");
+    const { JOURNAL_SCHEMA } = await import("@/lib/ai/prompts");
+    const journalOnlySchema = JOURNAL_SCHEMA.omit({ aiAnalysis: true });
+
+    let object: any;
+    try {
+      object = await AiService.generateStructuredData({
+        systemPrompt: JOURNAL_FINALIZATION_SYSTEM_PROMPT,
+        userPrompt: buildFinalizationUserPrompt({
+          originalJournalText: todayJournal.originalText,
+          personalMemories: memories,
+          activityContext
+        }),
+        schema: journalOnlySchema,
+        context: {
+          originalJournalText: todayJournal.originalText,
+          personalMemories: memories,
+          activityContext
+        }
+      });
+    } catch (aiError: any) {
+      const isQuotaError = 
+        aiError?.statusCode === 429 || 
+        aiError?.message?.toLowerCase().includes("quota") || 
+        aiError?.message?.toLowerCase().includes("rate limit") ||
+        aiError?.message?.toLowerCase().includes("429");
+
+      if (isQuotaError && process.env.ENABLE_AI_MOCK_DATA === 'true') {
+        object = {
+          title: todayJournal.subtitle || "Polished Day Reflection",
+          subtitle: "Integrating personal memories.",
+          emotion: todayJournal.themeColor || "Satisfied",
+          stickyNote: todayJournal.quote,
+          journal: `${todayJournal.originalText}\n\n[Reflections on: ${memories.join(', ')}]`,
+          dailyInsight: "Every memory shapes our reflection.",
+          tomorrowIntention: "Continue capturing daily highlights.",
+          gratitude: "Grateful for memories.",
+          favoriteQuote: todayJournal.quote,
+          imagePrompts: [],
+          stickers: [todayJournal.sticker],
+          journalTags: todayJournal.tags,
+          themeColor: todayJournal.themeColor,
+          musicMood: todayJournal.musicMood,
+          highlights: todayJournal.highlights
+        };
+      } else {
+        throw aiError;
+      }
+    }
+
+    // 3. Convert Markdown to TipTap basic JSON structure
+    const normalizedText = (object.journal as string).replace(/\\n/g, '\n');
+    const paragraphs = normalizedText.split(/\n\n+/).filter((p: string) => p.trim() !== '');
+    const tiptapContent = {
+      type: 'doc',
+      content: paragraphs.map((p: string) => {
+        const attachMatch = p.trim().match(/^\[ATTACHMENT:\s*([^\]]+)\]$/i);
+        if (attachMatch) {
+          const attId = attachMatch[1].trim();
+          const att = todayJournal.attachments?.find(a => a.id === attId);
+          if (att) {
+            const caption = captionsMap.get(att.id) || "";
+            if (att.type === 'IMAGE') {
+              return {
+                type: 'customImage',
+                attrs: { src: att.storagePath, attachmentId: att.id, summary: att.summary, caption }
+              };
+            } else if (att.type === 'VOICE') {
+              return {
+                type: 'customAudio',
+                attrs: { src: att.storagePath, attachmentId: att.id, duration: att.duration || 0, transcript: att.summary, summary: att.summary }
+              };
+            } else if (att.type === 'PDF') {
+              return {
+                type: 'customPDF',
+                attrs: { src: att.storagePath, attachmentId: att.id, filename: att.filename, pages: att.pages || 0, size: att.size || 0, summary: att.summary }
+              };
+            }
+          }
+        }
+        return {
+          type: 'paragraph',
+          content: [{ type: 'text', text: p.trim() }]
+        };
+      })
+    };
+
+    const existingInsights = todayJournal.insights as any;
+    const existingAiAnalysis = existingInsights?.aiAnalysis || null;
+
+    const finalizedData = {
+      content: tiptapContent,
+      originalText: object.journal,
+      quote: object.stickyNote,
+      sticker: object.stickers.length > 0 ? object.stickers[0] : todayJournal.sticker,
+      tags: object.journalTags,
+      subtitle: object.subtitle,
+      themeColor: object.themeColor,
+      musicMood: object.musicMood,
+      highlights: object.highlights,
+      isFinalized: true,
+      insights: {
+        title: object.title,
+        emotion: object.emotion,
+        dailyInsight: object.dailyInsight,
+        tomorrowIntention: object.tomorrowIntention,
+        gratitude: object.gratitude,
+        gratitudeList: object.gratitudeList,
+        quote: object.favoriteQuote,
+        highlights: object.highlights,
+        stickers: object.stickers,
+        journalTags: object.journalTags,
+        themeColor: object.themeColor,
+        musicMood: object.musicMood,
+        imagePrompts: object.imagePrompts,
+        aiAnalysis: existingAiAnalysis,
+      }
+    };
+
+    const dbJournal = await prisma.journal.update({
+      where: { id: journalId },
+      data: finalizedData,
+      include: { personalMemories: true }
+    });
+
+    // Create a Version snapshot
+    const versionCount = await prisma.journalVersion.count({ where: { journalId } });
+    await prisma.journalVersion.create({
+      data: {
+        journalId,
+        versionNumber: versionCount + 1,
+        snapshot: tiptapContent,
+        createdBy: "AI_FINALIZATION"
+      }
+    });
+
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/journal");
+
+    return { success: true, journal: { ...dbJournal, date: dbJournal.date.toISOString() } };
+  } catch (error: any) {
+    console.error("Finalization Error:", error);
+    return { success: false, error: error.message || "Failed to finalize journal." };
+  }
 }

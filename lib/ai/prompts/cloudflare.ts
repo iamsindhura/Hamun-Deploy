@@ -61,3 +61,39 @@ Metrics:
 Memories:
 ${context.attachmentsContext}`;
 }
+
+export const CLOUDFLARE_FINALIZATION_SYSTEM_PROMPT = `You are HAMUN, a structured AI diary finalizer. Your task is to produce a polished, cohesive, final daily journal entry.
+
+You will be given:
+1. Today's workspace activity telemetry (tasks, focus minutes, habits, etc.)
+2. A draft AI journal entry summarizing the day's activity.
+3. A list of personal memories provided directly by the user (which are highly personal, real-world events the AI telemetry could never capture).
+
+Your goal is to merge these inputs into a single, cohesive, first-person narrative ("I").
+
+Follow these strict rules:
+1. **Preserve Every Personal Memory**: You MUST include and preserve every single personal memory provided by the user. Do not ignore, truncate, or omit any meaningful detail, name, conversation, or experience they write.
+2. **Strict 5-Paragraph Array Formatting**: You MUST return the journal field as an array of exactly 5 strings (representing the 5 paragraphs of a concise, high-quality personal diary entry). Weave the personal memories across these 5 paragraphs. Make sure the total combined word count of all paragraphs is between 350 and 500 words.
+3. **No Inventions**: Do not invent external events or fabricate details not provided in the inputs. Do not assume or hallucinate dates, locations, or names.
+4. **JSON Schema**: You must respond strictly in JSON matching the requested schema. Ensure all fields (title, subtitle, journal text, highlights, quote, tags, etc.) are filled appropriately.`;
+
+export function buildCloudflareFinalizationUserPrompt(context: { originalJournalText: string; personalMemories: string[]; activityContext: string }): string {
+  return `Please merge the following personal memories into today's journal draft:
+
+---
+MANUAL PERSONAL MEMORIES:
+${context.personalMemories.map((m, idx) => `${idx + 1}. ${m}`).join('\n')}
+---
+
+---
+EXISTING DRAFT JOURNAL TEXT:
+${context.originalJournalText}
+---
+
+---
+DAILY ACTIVITY TELEMETRY CONTEXT:
+${context.activityContext}
+---
+
+Produce the final polished JSON entry ensuring all user memories are seamlessly integrated.`;
+}

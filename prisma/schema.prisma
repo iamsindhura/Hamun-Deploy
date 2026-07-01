@@ -22,6 +22,7 @@ model User {
   audioVolume             String             @default("HIGH")
   audioWarningEnabled     Boolean            @default(true)
   theme                   String             @default("LIGHT")
+  journalUnlockTime       String             @default("20:00")
   accounts                Account[]
   contacts                Contact[]
   focusSessions           FocusSession[]
@@ -239,10 +240,23 @@ model Journal {
   highlights        String[]
   attachments       Attachment[]
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isFinalized       Boolean          @default(false)
+  personalMemories  PersonalMemory[]
   versions          JournalVersion[]
 
   @@unique([userId, date])
   @@index([userId, date])
+}
+
+model PersonalMemory {
+  id        String   @id @default(cuid())
+  journalId String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  journal   Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+
+  @@index([journalId])
 }
 
 model AIMemory {

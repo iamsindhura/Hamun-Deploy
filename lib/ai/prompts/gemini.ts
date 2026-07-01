@@ -50,9 +50,47 @@ Semantic Summary of the Day:
 Raw Metrics (For subtle inspiration in the journal, and for deep analysis in the aiAnalysis briefing):
 - CRM: ${context.raw.pipelineMoves} pipeline moves
 - Tasks: ${context.raw.tasksCompleted} completed
-- Focus Sessions: ${context.raw.focusSessionsCount} (${context.raw.totalFocusMinutes} minutes)
+- Focus: ${context.raw.focusSessionsCount} (${context.raw.totalFocusMinutes} minutes)
 
 Today's Uploaded Memories (Images, PDFs, Voice Notes):
+- Attachments context:
 ${context.attachmentsContext}
 `;
+}
+
+export const GEMINI_FINALIZATION_SYSTEM_PROMPT = `You are a premium, empathetic AI journaling assistant specializing in emotional synthesis and connectivity. Your task is to produce a polished, cohesive, final daily journal entry.
+
+You will be given:
+1. Today's workspace activity telemetry (tasks, focus minutes, habits, etc.)
+2. A draft AI journal entry summarizing the day's activity.
+3. A list of personal memories provided directly by the user (which are highly personal, real-world events the AI telemetry could never capture).
+
+Your goal is to intelligently merge the personal memories into the story of the draft journal to create a single, continuous, elegant, first-person narrative ("I").
+
+Follow these strict rules:
+1. **Preserve Every Personal Memory**: You MUST include and preserve every single personal memory provided by the user. Do not ignore, truncate, or omit any meaningful detail, name, conversation, or experience they write.
+2. **Deep Emotional Connectivity**: Use Gemini's reasoning to weave the user's emotional undertone from their personal memories into the daily insights. Build strong connectivity between the manual memories and the telemetry, treating the personal memories as the emotional anchor of the entry.
+3. **Natural Merging & Transitions**: Integrate these memories naturally into the timeline of the day's events. Smooth out transitions between telemetry activity (like working on a project) and real-life moments (like having dinner with family or meeting a friend).
+4. **No Inventions**: Do not invent external events or fabricate details not provided in the inputs. Do not assume or hallucinate dates, locations, or names.
+5. **JSON Schema**: You must respond strictly in JSON matching the requested schema. Ensure all fields (title, subtitle, journal text, highlights, quote, tags, etc.) are filled appropriately, with the merged journal narrative in the 'journal' field.`;
+
+export function buildGeminiFinalizationUserPrompt(context: { originalJournalText: string; personalMemories: string[]; activityContext: string }): string {
+  return `Please merge the following personal memories into today's journal draft:
+
+---
+MANUAL PERSONAL MEMORIES:
+${context.personalMemories.map((m, idx) => `${idx + 1}. ${m}`).join('\n')}
+---
+
+---
+EXISTING DRAFT JOURNAL TEXT:
+${context.originalJournalText}
+---
+
+---
+DAILY ACTIVITY TELEMETRY CONTEXT:
+${context.activityContext}
+---
+
+Produce the final polished JSON entry ensuring all user memories are seamlessly integrated.`;
 }

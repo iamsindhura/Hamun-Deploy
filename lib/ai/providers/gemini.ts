@@ -3,7 +3,12 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { AIProvider } from "../types";
 import { getGeminiConfig } from "../env";
 import { withTimeout } from "../utils";
-import { GEMINI_SYSTEM_PROMPT, buildGeminiUserPrompt } from "../prompts/gemini";
+import { 
+  GEMINI_SYSTEM_PROMPT, 
+  buildGeminiUserPrompt, 
+  GEMINI_FINALIZATION_SYSTEM_PROMPT, 
+  buildGeminiFinalizationUserPrompt 
+} from "../prompts/gemini";
 
 export const geminiProvider: AIProvider = {
   name: "gemini",
@@ -16,8 +21,15 @@ export const geminiProvider: AIProvider = {
     });
     const model = google("gemini-2.5-flash");
 
-    const system = prompt.context ? GEMINI_SYSTEM_PROMPT : prompt.systemPrompt;
-    const userPrompt = prompt.context ? buildGeminiUserPrompt(prompt.context) : prompt.userPrompt;
+    const isFinalization = !!(prompt.context && 'personalMemories' in prompt.context);
+    
+    const system = isFinalization
+      ? GEMINI_FINALIZATION_SYSTEM_PROMPT
+      : (prompt.context ? GEMINI_SYSTEM_PROMPT : prompt.systemPrompt);
+      
+    const userPrompt = isFinalization
+      ? buildGeminiFinalizationUserPrompt(prompt.context)
+      : (prompt.context ? buildGeminiUserPrompt(prompt.context) : prompt.userPrompt);
 
     return withTimeout(async (signal) => {
       const { object } = await generateObject({

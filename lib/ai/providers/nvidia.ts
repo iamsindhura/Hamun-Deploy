@@ -3,7 +3,12 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { AIProvider } from "../types";
 import { getNvidiaConfig } from "../env";
 import { withTimeout } from "../utils";
-import { NVIDIA_SYSTEM_PROMPT, buildNvidiaUserPrompt } from "../prompts/nvidia";
+import { 
+  NVIDIA_SYSTEM_PROMPT, 
+  buildNvidiaUserPrompt, 
+  NVIDIA_FINALIZATION_SYSTEM_PROMPT, 
+  buildNvidiaFinalizationUserPrompt 
+} from "../prompts/nvidia";
 
 export const nvidiaProvider: AIProvider = {
   name: "nvidia",
@@ -19,8 +24,15 @@ export const nvidiaProvider: AIProvider = {
     // Using a standard, high-performance Llama model hosted on NVIDIA NIM
     const model = openai.chat("meta/llama-3.1-70b-instruct");
 
-    const system = prompt.context ? NVIDIA_SYSTEM_PROMPT : prompt.systemPrompt;
-    const userPrompt = prompt.context ? buildNvidiaUserPrompt(prompt.context) : prompt.userPrompt;
+    const isFinalization = !!(prompt.context && 'personalMemories' in prompt.context);
+    
+    const system = isFinalization
+      ? NVIDIA_FINALIZATION_SYSTEM_PROMPT
+      : (prompt.context ? NVIDIA_SYSTEM_PROMPT : prompt.systemPrompt);
+      
+    const userPrompt = isFinalization
+      ? buildNvidiaFinalizationUserPrompt(prompt.context)
+      : (prompt.context ? buildNvidiaUserPrompt(prompt.context) : prompt.userPrompt);
 
     return withTimeout(async (signal) => {
       const { object } = await generateObject({

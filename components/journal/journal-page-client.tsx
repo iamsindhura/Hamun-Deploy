@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { JournalCalendar } from "@/components/journal/journal-calendar";
 import { JournalNotebook } from "@/components/journal/journal-notebook";
 import { JournalRightSidebar } from "@/components/journal/journal-right-sidebar";
-import { Plus, Search, Command, Heart } from "lucide-react";
-import { getJournalHistory, getJournal, createEmptyJournal, generateJournal, toggleFavorite, generateDailyAnalysis } from "@/app/actions/journal";
+import { Plus, Search, Command, Heart, Settings } from "lucide-react";
+import { getJournalHistory, getJournal, createEmptyJournal, generateJournal, toggleFavorite, generateDailyAnalysis, savePersonalMemories, finalizeJournalAction } from "@/app/actions/journal";
+import { getUserJournalSettings, updateJournalUnlockTime } from "@/app/actions/user";
+import { PersonalMemoriesModal } from "./personal-memories-modal";
 import { format, isSameDay } from "date-fns";
 import { toast } from "sonner";
 import { parseJournalContent } from "@/lib/tiptap-utils";
@@ -22,28 +24,138 @@ export function JournalPageClient() {
   const [loadingPhase, setLoadingPhase] = useState<string | null>(null);
   const [showConfirmRegenerate, setShowConfirmRegenerate] = useState(false);
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
+  const [isMemoriesModalOpen, setIsMemoriesModalOpen] = useState(false);
+  const [isSavingMemories, setIsSavingMemories] = useState(false);
 
-  const handleRegenerateAnalysis = async () => {
+  const [mounted, setMounted] = useState(false);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [unlockPreference, setUnlockPreference] = useState<string>("20:00");
+  const prevIsBeforeUnlockRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    setCurrentTime(new Date());
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 10000); // Update every 10 seconds
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await getUserJournalSettings();
+        if (res.success && res.unlockTime) {
+          setUnlockPreference(res.unlockTime);
+        }
+      } catch (err) {
+        console.error("Failed to load journal unlock preference", err);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const isToday = useMemo(() => {
+    if (activeJournal?.date) {
+      return isSameDay(new Date(activeJournal.date), new Date());
+    }
+    return isSameDay(selectedDate, new Date());
+  }, [activeJournal?.date, selectedDate]);
+
+  const isBeforeUnlock = useMemo(() => {
+    if (!mounted) return true; // Default to locked on server side to prevent hydration mismatches
+    const [prefHours, prefMins] = unlockPreference.split(":").map(Number);
+    const unlockTime = new Date(currentTime);
+    unlockTime.setHours(prefHours, prefMins, 0, 0); // Today at custom PM local time
+    return currentTime.getTime() < unlockTime.getTime();
+  }, [mounted, currentTime, unlockPreference]);
+
+  const remainingTimeStr = useMemo(() => {
+    if (!isBeforeUnlock || !mounted) return "";
+    const [prefHours, prefMins] = unlockPreference.split(":").map(Number);
+    const target = new Date(currentTime);
+    target.setHours(prefHours, prefMins, 0, 0);
+    const diffMs = target.getTime() - currentTime.getTime();
+    if (diffMs <= 0) return "";
+    
+    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const diffSecs = Math.floor((diffMs % (1000 * 60)) / 1000);
+    
+    if (diffHrs > 0) {
+      return `${diffHrs}h ${diffMins}m remaining`;
+    }
+    if (diffMins > 0) {
+      return `${diffMins}m ${diffSecs}s remaining`;
+    }
+    return `${diffSecs}s remaining`;
+  }, [isBeforeUnlock, currentTime, mounted, unlockPreference]);
+
+  // Unlock toast notifier effect
+  useEffect(() => {
+    if (prevIsBeforeUnlockRef.current === null) {
+      prevIsBeforeUnlockRef.current = isBeforeUnlock;
+      return;
+    }
+
+    // Transition from locked to unlocked
+    if (prevIsBeforeUnlockRef.current === true && isBeforeUnlock === false && isToday) {
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const storageKey = `unlocked-notify-${dateStr}`;
+      const hasNotified = localStorage.getItem(storageKey);
+      
+      if (!hasNotified) {
+        toast("🔓 AI Journal Unlocked", {
+          description: "Your daily AI journal is now available. Generate today's reflection whenever you're ready.",
+          duration: 6000,
+        });
+        localStorage.setItem(storageKey, "true");
+      }
+    }
+
+    prevIsBeforeUnlockRef.current = isBeforeUnlock;
+  }, [isBeforeUnlock, isToday, selectedDate]);
+
+  const handleUnlockPreferenceChange = async (newTime: string) => {
+    setUnlockPreference(newTime);
+    try {
+      const res = await updateJournalUnlockTime(newTime);
+      if (res.success) {
+        const hours = parseInt(newTime.split(":")[0], 10);
+        const suffix = hours >= 12 ? "PM" : "AM";
+        const formattedHours = hours % 12 || 12;
+        toast.success(`Preferred unlock time updated to ${formattedHours}:00 ${suffix}.`);
+      } else {
+        toast.error(res.error || "Failed to update unlock time preference");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update unlock time preference");
+    }
+  };
+
+  const handleRegenerateAnalysis = useCallback(async () => {
     if (!activeJournal?.id) return;
     setIsGeneratingAnalysis(true);
     try {
+      const hadInsights = !!activeJournal?.insights?.aiAnalysis;
       const res = await generateDailyAnalysis(activeJournal.id);
       if (res.success && res.journal) {
         handleUpdateJournal(res.journal);
-        toast.success("AI Analysis Regenerated", { duration: 2000 });
+        toast.success(hadInsights ? "AI Insights Regenerated" : "AI Insights Generated Successfully", { duration: 2000 });
       } else {
         if (res.errorType === 'QUOTA_EXCEEDED') {
           toast.warning("⚠️ Daily AI limit reached. Please try again in a few minutes.", { duration: 4000 });
         } else {
-          toast.error(res.error || "Failed to regenerate analysis");
+          toast.error(res.error || "Failed to generate analysis");
         }
       }
     } catch (e) {
-      toast.error("Failed to regenerate analysis");
+      toast.error("Failed to generate analysis");
     } finally {
       setIsGeneratingAnalysis(false);
     }
-  };
+  }, [activeJournal?.id, activeJournal?.insights?.aiAnalysis]);
 
   const loadHistory = async () => {
     try {
@@ -54,10 +166,7 @@ export function JournalPageClient() {
     }
   };
 
-  const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
-    setMounted(true);
     loadHistory();
   }, []);
 
@@ -145,12 +254,9 @@ export function JournalPageClient() {
     
     // Sequence the loading text
     const phases = [
-      "Preparing Today's Context...",
-      "Understanding Your Photos...",
-      "Listening to Voice Notes...",
-      "Connecting Today's Story...",
-      "Writing Your Reflection...",
-      "Adding Final Touches..."
+      "Generating Journal...",
+      "Writing Reflection...",
+      "Finalizing Journal..."
     ];
     let phaseIndex = 0;
     const interval = setInterval(() => {
@@ -179,6 +285,67 @@ export function JournalPageClient() {
     } catch (error) {
       console.error(error);
       toast.error("Failed to generate journal");
+    } finally {
+      clearInterval(interval);
+      setLoadingPhase(null);
+    }
+  };
+
+  const handleSaveMemories = async (memories: string[]) => {
+    setIsSavingMemories(true);
+    try {
+      const journalId = await handleEnsureJournal();
+      if (!journalId) {
+        toast.error("Failed to prepare journal for today.");
+        return;
+      }
+
+      const res = await savePersonalMemories(journalId, memories);
+      if (res.success && res.journal) {
+        handleUpdateJournal(res.journal);
+        toast.success(`✓ ${memories.length} Personal Memories Saved`, { duration: 2500 });
+        setIsMemoriesModalOpen(false);
+      } else {
+        toast.error(res.error || "Failed to save memories");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save memories");
+    } finally {
+      setIsSavingMemories(false);
+    }
+  };
+
+  const handleFinalizeJournal = async () => {
+    if (!activeJournal?.id) return;
+    setLoadingPhase("Polishing final narrative...");
+
+    const phases = [
+      "Integrating personal memories...",
+      "Improving emotional flow...",
+      "Structuring finalized reflection...",
+      "Polishing final journal..."
+    ];
+    let phaseIndex = 0;
+    const interval = setInterval(() => {
+      phaseIndex = (phaseIndex + 1) % phases.length;
+      setLoadingPhase(phases[phaseIndex]);
+    }, 2200);
+
+    try {
+      const res = await finalizeJournalAction(activeJournal.id);
+      if (res.success && res.journal) {
+        handleUpdateJournal(res.journal);
+        toast.success("✓ Final Journal Created", {
+          description: "Your daily journal is now permanently finalized with all your personal memories.",
+          duration: 3500,
+        });
+      } else {
+        toast.error(res.error || "Failed to finalize journal");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to finalize journal");
     } finally {
       clearInterval(interval);
       setLoadingPhase(null);
@@ -350,6 +517,12 @@ export function JournalPageClient() {
           setEditorSticker={setEditorSticker}
           onRegenerate={() => setShowConfirmRegenerate(true)}
           loadingPhase={loadingPhase}
+          isToday={isToday}
+          isBeforeUnlock={isBeforeUnlock}
+          remainingTimeStr={remainingTimeStr}
+          unlockPreference={unlockPreference}
+          onAddMemories={() => setIsMemoriesModalOpen(true)}
+          onFinalizeJournal={handleFinalizeJournal}
         />
         
         {/* Confirm Regenerate Dialog */}
@@ -382,6 +555,14 @@ export function JournalPageClient() {
         )}
       </main>
 
+      <PersonalMemoriesModal
+        isOpen={isMemoriesModalOpen}
+        onClose={() => setIsMemoriesModalOpen(false)}
+        initialMemories={activeJournal?.personalMemories?.map((m: any) => m.content) || []}
+        onSave={handleSaveMemories}
+        isSaving={isSavingMemories}
+      />
+
       {/* Right Sidebar */}
       <aside className="w-[320px] shrink-0 border-l border-border bg-[#FCFAF6] h-full overflow-y-auto px-5 pt-6 pb-8 space-y-6 flex flex-col hidden xl:flex">
         <JournalRightSidebar 
@@ -409,6 +590,11 @@ export function JournalPageClient() {
             }, 100);
           }}
           onEnsureJournal={handleEnsureJournal}
+          isToday={isToday}
+          isBeforeUnlock={isBeforeUnlock}
+          remainingTimeStr={remainingTimeStr}
+          unlockPreference={unlockPreference}
+          onUnlockPreferenceChange={handleUnlockPreferenceChange}
         />
       </aside>
 

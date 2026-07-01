@@ -88,3 +88,45 @@ export async function updateTheme(theme: string) {
  return { success: false, error: "Failed to save theme" };
  }
 }
+
+export async function getUserJournalSettings() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { journalUnlockTime: true },
+    });
+    return { success: true, unlockTime: user?.journalUnlockTime || "20:00" };
+  } catch (error) {
+    console.error("Failed to fetch user journal settings", error);
+    return { success: false, error: "Failed to fetch settings" };
+  }
+}
+
+export async function updateJournalUnlockTime(unlockTime: string) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const validTimes = ["19:00", "20:00", "21:00", "22:00"];
+  if (!validTimes.includes(unlockTime)) {
+    return { success: false, error: "Invalid unlock time" };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { journalUnlockTime: unlockTime },
+    });
+    revalidatePath("/journal");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update journal unlock time", error);
+    return { success: false, error: "Failed to save setting" };
+  }
+}

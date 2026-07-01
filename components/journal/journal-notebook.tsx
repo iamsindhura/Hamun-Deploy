@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { format } from "date-fns";
-import { Sparkles, Edit2, ChevronDown, Camera, Lightbulb, Target, Heart, HeartHandshake } from "lucide-react";
+import { Sparkles, Edit2, ChevronDown, Camera, Lightbulb, Target, Heart, HeartHandshake, Download, FileText, Check, Clock, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateJournal, getJournal, saveJournal } from "@/app/actions/journal";
 import Image from "next/image";
@@ -10,7 +10,7 @@ import { TiptapEditor } from "@/components/journal/editor/TiptapEditor";
 import { parseJournalContent, extractTextFromTiptap } from "@/lib/tiptap-utils";
 import { toast } from "sonner";
 import { EMOTIONS } from "@/lib/emotions";
-import { Check } from "lucide-react";
+import { exportToPDF, generateMarkdown, generatePlainText } from "@/lib/export-utils";
 
 interface JournalNotebookProps {
   selectedDate: Date;
@@ -23,11 +23,26 @@ interface JournalNotebookProps {
   onRegenerate: () => void;
   loadingPhase: string | null;
   editorRef?: any;
+  isToday: boolean;
+  isBeforeUnlock?: boolean;
+  remainingTimeStr?: string;
+  unlockPreference?: string;
+  onAddMemories?: () => void;
+  onFinalizeJournal?: () => void;
 }
 
-export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, editMode, setEditMode, editorSticker, setEditorSticker, onRegenerate, loadingPhase, editorRef }: JournalNotebookProps) {
+export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, editMode, setEditMode, editorSticker, setEditorSticker, onRegenerate, loadingPhase, editorRef, isToday, isBeforeUnlock = false, remainingTimeStr = "", unlockPreference = "20:00", onAddMemories, onFinalizeJournal }: JournalNotebookProps) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isEmotionDropdownOpen, setIsEmotionDropdownOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  const formattedUnlockTime = useMemo(() => {
+    const hours = parseInt(unlockPreference.split(":")[0], 10);
+    const suffix = hours >= 12 ? "PM" : "AM";
+    const formattedHours = hours % 12 || 12;
+    return `${formattedHours}:00 ${suffix}`;
+  }, [unlockPreference]);
   
   // Dragging state
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -36,6 +51,19 @@ export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, 
   const stickyRef = useRef<HTMLDivElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
   const latestPosition = useRef(position);
+
+  // Helper state flags to determine flow stages
+  const hasAiDraft = useMemo(() => {
+    return !!(activeJournal && activeJournal.originalText !== "" && activeJournal.insights?.title !== "");
+  }, [activeJournal]);
+
+  const hasSavedMemories = useMemo(() => {
+    return !!(activeJournal && activeJournal.personalMemories && activeJournal.personalMemories.length > 0);
+  }, [activeJournal]);
+
+  const isFinalized = useMemo(() => {
+    return !!(activeJournal && activeJournal.isFinalized);
+  }, [activeJournal]);
 
   useEffect(() => {
     latestPosition.current = position;
@@ -57,11 +85,14 @@ export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, 
     }
   }, [editMode, activeJournal]);
 
-  // Handle click outside to close emotion dropdown
+  // Handle click outside to close emotion dropdown and export dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsEmotionDropdownOpen(false);
+      }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -88,6 +119,43 @@ export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, 
       setPosition({ x: 0, y: 0 });
     }
   }, [activeJournal?.id]);
+
+  const handleExport = (formatType: "pdf" | "markdown" | "txt") => {
+    setIsExportMenuOpen(false);
+    if (!activeJournal) return;
+
+    try {
+      if (formatType === "pdf") {
+        exportToPDF(activeJournal);
+        toast.success("PDF Export initialized successfully.");
+      } else if (formatType === "markdown") {
+        const mdContent = generateMarkdown(activeJournal);
+        const blob = new Blob([mdContent], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const formattedDate = format(new Date(activeJournal.date), "yyyy-MM-dd");
+        link.href = url;
+        link.download = `journal-${formattedDate}.md`;
+        link.click();
+        URL.revokeObjectURL(url);
+        toast.success("Markdown exported successfully.");
+      } else if (formatType === "txt") {
+        const txtContent = generatePlainText(activeJournal);
+        const blob = new Blob([txtContent], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const formattedDate = format(new Date(activeJournal.date), "yyyy-MM-dd");
+        link.href = url;
+        link.download = `journal-${formattedDate}.txt`;
+        link.click();
+        URL.revokeObjectURL(url);
+        toast.success("Plain text exported successfully.");
+      }
+    } catch (err) {
+      console.error("Export failed", err);
+      toast.error("Failed to export journal.");
+    }
+  };
 
   const triggerAutoSave = (updatedFields: any, newContent: any) => {
     setSaveStatus("saving");
@@ -266,13 +334,16 @@ export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, 
           <div className="flex">
             <div className="relative" ref={dropdownRef}>
               <div 
-                onClick={() => setIsEmotionDropdownOpen(!isEmotionDropdownOpen)}
-                className="flex items-center gap-2 bg-white border border-[#E5E7EB] rounded-full px-4 py-2 text-sm text-[#4B5563] shadow-sm transition-all cursor-pointer hover:bg-gray-50 inline-flex"
+                onClick={() => isToday && setIsEmotionDropdownOpen(!isEmotionDropdownOpen)}
+                className={cn(
+                  "flex items-center gap-2 bg-white border border-[#E5E7EB] rounded-full px-4 py-2 text-sm text-[#4B5563] shadow-sm transition-all inline-flex",
+                  isToday ? "cursor-pointer hover:bg-gray-50" : "cursor-default"
+                )}
               >
                 <span className="text-xs text-muted-foreground font-medium">Today's Emotion:</span>
                 <div className="flex items-center gap-1.5 font-semibold pr-2 text-foreground">
                   {EMOTIONS.find(e => e.label === (emotion.includes(" ") ? emotion.split(" ")[1] : emotion))?.emoji || "😌"} {emotion.includes(" ") ? emotion.split(" ")[1] : emotion}
-                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-1" />
+                  {isToday && <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-1" />}
                 </div>
               </div>
 
@@ -312,41 +383,170 @@ export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, 
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 w-full">
             
             {/* Left Column: Edit & Regenerate */}
-            <div className="flex flex-col gap-4 shrink-0">
+            <div className="flex flex-col gap-4 shrink-0 font-sans">
               
-              {/* Edit Button */}
-              <div>
-                {editMode ? (
-                  <div className="flex items-center gap-3">
+              {/* 1. Edit Button */}
+              {isToday && (
+                <div>
+                  {editMode ? (
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => setEditMode(false)}
+                        className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors"
+                      >
+                        Done
+                      </button>
+                      {saveStatus === "saving" && <span className="text-sm text-muted-foreground font-medium animate-pulse">Saving...</span>}
+                      {saveStatus === "saved" && <span className="text-sm text-green-600 font-medium">Saved</span>}
+                    </div>
+                  ) : (
                     <button 
-                      onClick={() => setEditMode(false)}
+                      onClick={() => setEditMode(true)}
                       className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors"
                     >
-                      Done
+                      <Edit2 className="w-4 h-4" /> Edit
                     </button>
-                    {saveStatus === "saving" && <span className="text-sm text-muted-foreground font-medium animate-pulse">Saving...</span>}
-                    {saveStatus === "saved" && <span className="text-sm text-green-600 font-medium">Saved</span>}
-                  </div>
-                ) : (
+                  )}
+                </div>
+              )}
+
+              {/* 2. Generate Journal / Finalize Journal Button */}
+              {isToday && !editMode && (
+                <div>
+                  {isFinalized ? (
+                    // State 5: Final Journal Completed
+                    <div className="flex items-center gap-2 bg-gray-50 text-gray-600 px-4 py-2 rounded-full border border-gray-200 text-xs font-bold shadow-sm select-none">
+                      <Lock className="w-3.5 h-3.5 text-gray-500" /> Final Journal Completed
+                    </div>
+                  ) : isBeforeUnlock ? (
+                    // Locked state: it is before the configured unlock time
+                    <div className="flex flex-col gap-1 items-start">
+                      {!hasAiDraft ? (
+                        <button 
+                          onClick={onRegenerate}
+                          disabled={true}
+                          className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
+                        >
+                          <Sparkles className="w-4 h-4" /> Generate Journal
+                        </button>
+                      ) : !hasSavedMemories ? (
+                        <button 
+                          onClick={onRegenerate}
+                          disabled={true}
+                          className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
+                        >
+                          <Sparkles className="w-4 h-4" /> 🔄 Regenerate Journal
+                        </button>
+                      ) : (
+                        <button
+                          onClick={onFinalizeJournal}
+                          disabled={true}
+                          className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
+                        >
+                          <Sparkles className="w-4 h-4" /> ✨ Finalize Journal
+                        </button>
+                      )}
+                      <span className="text-[11px] text-[#7A5AF8] font-semibold italic">
+                        Unlocks at {formattedUnlockTime} {remainingTimeStr ? `(${remainingTimeStr})` : ""}
+                      </span>
+                    </div>
+                  ) : !hasAiDraft ? (
+                    // State 2: After unlock time, no draft exists
+                    <button 
+                      onClick={onRegenerate}
+                      disabled={!!loadingPhase}
+                      className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" /> Generate Journal
+                    </button>
+                  ) : !hasSavedMemories ? (
+                    // State 3: First AI draft generated, 0 memories
+                    <button 
+                      onClick={onRegenerate}
+                      disabled={!!loadingPhase}
+                      className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" /> 🔄 Regenerate Journal
+                    </button>
+                  ) : (
+                    // State 4: Draft exists, at least 1 memory saved
+                    <button
+                      onClick={onFinalizeJournal}
+                      disabled={!!loadingPhase}
+                      className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" /> ✨ Finalize Journal
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* 3. Add Personal Memories Button */}
+              {isToday && !editMode && !isFinalized && (
+                <div className="flex flex-col gap-1 items-start">
+                  <button
+                    onClick={onAddMemories}
+                    disabled={!!loadingPhase}
+                    className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 disabled:hover:bg-white rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    <Sparkles className="w-4 h-4 text-purple-500" /> Add Personal Memories
+                  </button>
+                  
+                  {!hasAiDraft && (
+                    <span className="text-[11px] text-muted-foreground italic text-left">
+                      {isBeforeUnlock 
+                        ? `Add personal memories now. They will be merged when the journal unlocks at ${formattedUnlockTime}.`
+                        : "Add personal memories now. They will be merged when you generate today's journal."
+                      }
+                    </span>
+                  )}
+
+                  {hasSavedMemories && (
+                    <span className="text-[11px] text-emerald-600 font-semibold italic">
+                      ✓ {activeJournal.personalMemories.length} Personal Memories Saved
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* 4. Export Journal Button */}
+              {activeJournal && !editMode && (
+                <div className="relative" ref={exportMenuRef}>
                   <button 
-                    onClick={() => setEditMode(true)}
+                    onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
                     className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:bg-gray-50 rounded-full px-5 py-2 text-sm font-medium text-[#4B5563] shadow-sm transition-colors"
                   >
-                    <Edit2 className="w-4 h-4" /> Edit
+                    <Download className="w-4 h-4" /> Export Journal
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-0.5" />
                   </button>
-                )}
-              </div>
 
-              {/* Regenerate Button */}
-              {!editMode && (
-                <div>
-                  <button 
-                    onClick={onRegenerate}
-                    disabled={!!loadingPhase}
-                    className="flex items-center gap-2 bg-[#7A5AF8] hover:bg-[#6346E0] rounded-full px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-50"
-                  >
-                    <Sparkles className="w-4 h-4" /> Regenerate
-                  </button>
+                  {isExportMenuOpen && (
+                    <div className="absolute top-full mt-2 left-0 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-2 space-y-1">
+                        <button
+                          onClick={() => handleExport("pdf")}
+                          className="w-full text-left px-4 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4 text-red-500" />
+                          PDF Document
+                        </button>
+                        <button
+                          onClick={() => handleExport("markdown")}
+                          className="w-full text-left px-4 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4 text-blue-500" />
+                          Markdown (.md)
+                        </button>
+                        <button
+                          onClick={() => handleExport("txt")}
+                          className="w-full text-left px-4 py-2.5 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4 text-gray-500" />
+                          Plain Text (.txt)
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -396,8 +596,59 @@ export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, 
           <div className="absolute -right-8 bottom-10 text-[#86EFAC] opacity-80 text-4xl hidden md:block z-0 pointer-events-none">🌿</div>
 
           {!activeJournal && !loadingPhase && !editMode && (
-            <div className="py-20 text-center text-muted-foreground italic z-10 relative">
-              No journal entry found for this date. Click Edit to manually write one, or Regenerate to use AI.
+            <div className="py-10 text-center z-10 relative flex flex-col items-center justify-center gap-6 max-w-lg mx-auto w-full px-4">
+              {isToday ? (
+                isBeforeUnlock ? (
+                  <>
+                    <div className="bg-gradient-to-b from-white to-[#F9FAFB] rounded-3xl border border-[#E5E7EB] shadow-sm p-8 flex flex-col items-center text-center w-full">
+                      <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mb-5 text-amber-500 border border-amber-100 shadow-sm animate-pulse">
+                        <Clock className="w-7 h-7" />
+                      </div>
+                      
+                      <h3 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2 justify-center">
+                        <Lock className="w-4 h-4 text-muted-foreground" /> AI Journal Locked
+                      </h3>
+                      
+                      <p className="text-xs text-gray-600 leading-relaxed mb-6 not-italic">
+                        Your AI Journal becomes available after your configured unlock time ({formattedUnlockTime}) so it can reflect your complete day.
+                      </p>
+                      
+                      {remainingTimeStr && (
+                        <div className="bg-[#F5F3FF] border border-[#DDD6FE] rounded-2xl py-3 px-6 mb-6">
+                          <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider block mb-1 not-italic">⏳ Unlocks in:</span>
+                          <span className="text-2xl font-black text-purple-700 tracking-tight not-italic">{remainingTimeStr.replace(" remaining", "")}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-start gap-3 bg-gray-50 border border-gray-150 rounded-2xl p-4 text-left w-full">
+                        <span className="text-lg shrink-0 mt-0.5">✍️</span>
+                        <p className="text-xs text-gray-600 leading-relaxed not-italic">
+                          You can continue writing, adding images, voice notes, and organizing today's journal manually while you wait.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Manual Journal Reminder / Tip Card */}
+                    <div className="bg-[#FEFCE8] border border-[#FEF08A] rounded-2xl p-5 flex items-start gap-4 shadow-sm w-full">
+                      <div className="text-xl shrink-0">💡</div>
+                      <div className="text-left">
+                        <h4 className="text-xs font-bold text-yellow-800 uppercase tracking-wider mb-1 not-italic">Tip</h4>
+                        <p className="text-xs text-yellow-900/90 leading-relaxed not-italic">
+                          Keep writing throughout the day. The AI will use everything you've written to generate a richer and more personalized journal after your unlock time.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground italic">
+                    No journal entry found for this date. Click Edit to manually write one, or Generate Journal to use AI.
+                  </p>
+                )
+              ) : (
+                <p className="text-muted-foreground italic">
+                  No journal entry found for this date.
+                </p>
+              )}
             </div>
           )}
 
@@ -416,6 +667,22 @@ export function JournalNotebook({ selectedDate, activeJournal, onUpdateJournal, 
                 editorSticker={editorSticker}
                 onStickerInserted={() => setEditorSticker(null)}
               />
+            </div>
+          )}
+
+          {activeJournal && !editMode && activeJournal.personalMemories && activeJournal.personalMemories.length > 0 && (
+            <div className="mt-8 border-t border-gray-150 pt-6 relative z-10 w-full font-sans">
+              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5 justify-start">
+                ✨ Personal Memories
+              </h4>
+              <ul className="space-y-2">
+                {activeJournal.personalMemories.map((m: any) => (
+                  <li key={m.id} className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-start gap-2.5 text-left font-medium">
+                    <span className="text-purple-500 mt-0.5">•</span>
+                    <span className="whitespace-pre-wrap flex-1">{m.content}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

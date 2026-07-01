@@ -19,25 +19,108 @@ interface AiAnalysisCardProps {
   initialAnalysis?: any;
   onRegenerate?: () => void;
   isGenerating?: boolean;
+  isToday?: boolean;
+  isBeforeUnlock?: boolean;
+  remainingTimeStr?: string;
 }
 
-export function AiAnalysisCard({ initialAnalysis, onRegenerate, isGenerating }: AiAnalysisCardProps) {
+export const AiAnalysisCard = React.memo(function AiAnalysisCard({ initialAnalysis, onRegenerate, isGenerating, isToday = true, isBeforeUnlock = false, remainingTimeStr = "" }: AiAnalysisCardProps) {
   const analysis = initialAnalysis;
+  const [loadingPhase, setLoadingPhase] = React.useState("Analyzing Today's Activity...");
+
+  React.useEffect(() => {
+    if (!isGenerating) return;
+    
+    const phases = [
+      "Analyzing Today's Activity...",
+      "Evaluating Productivity...",
+      "Understanding Relationships...",
+      "Preparing Recommendations..."
+    ];
+    
+    setLoadingPhase(phases[0]);
+    let index = 0;
+    const interval = setInterval(() => {
+      index = (index + 1) % phases.length;
+      setLoadingPhase(phases[index]);
+    }, 2500);
+    
+    return () => clearInterval(interval);
+  }, [isGenerating]);
+
+  if (isGenerating) {
+    return (
+      <div className="bg-gradient-to-b from-white to-gray-50/50 rounded-2xl p-8 border border-[#E5E7EB] shadow-sm relative overflow-hidden flex flex-col items-center text-center min-h-[300px] justify-center">
+        <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-100/50 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative mb-6">
+          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 animate-pulse">
+            <Brain className="w-8 h-8" />
+          </div>
+          <div className="absolute inset-0 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+        </div>
+        <h4 className="font-bold text-foreground text-sm mb-2">Generating AI Insights</h4>
+        <p className="text-xs text-purple-700 font-semibold animate-pulse leading-relaxed min-h-[1.5rem]">
+          {loadingPhase}
+        </p>
+      </div>
+    );
+  }
 
   if (!analysis) {
     return (
-      <div className="bg-gradient-to-b from-white to-gray-50/50 rounded-2xl p-6 border border-[#E5E7EB] shadow-sm relative overflow-hidden flex flex-col items-center text-center">
+      <div className="bg-gradient-to-b from-white to-gray-50/50 rounded-2xl border border-[#E5E7EB] shadow-sm relative overflow-hidden flex flex-col overflow-hidden relative">
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-100/50 rounded-full blur-3xl pointer-events-none" />
-        <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4 text-purple-600">
-          <Brain className="w-6 h-6" />
+        <div className="p-6 flex flex-col items-center text-center flex-1">
+          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4 text-purple-600">
+            <Brain className="w-6 h-6" />
+          </div>
+          <h4 className="font-bold text-foreground text-sm">Daily AI Briefing</h4>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed mb-1">
+            {isToday ? (
+              isBeforeUnlock 
+                ? "Journal unlocks at 8:00 PM local time to ensure it reflects your complete day." 
+                : "No AI Briefing generated yet."
+            ) : (
+              "No AI Briefing generated for this date."
+            )}
+          </p>
+          {isToday && !isBeforeUnlock && (
+            <p className="text-[10px] text-muted-foreground/80 italic">
+              Generate Today's AI Insights to view your analysis.
+            </p>
+          )}
+          {isToday && isBeforeUnlock && remainingTimeStr && (
+            <p className="text-xs text-[#7A5AF8] font-bold not-italic mt-2">
+              ⏳ {remainingTimeStr}
+            </p>
+          )}
         </div>
-        <h4 className="font-bold text-foreground text-sm">Daily AI Briefing</h4>
-        <p className="text-xs text-muted-foreground mt-2 leading-relaxed mb-1">
-          No AI Briefing generated yet.
-        </p>
-        <p className="text-[10px] text-muted-foreground/80 italic">
-          Generate Today's Journal to view your analysis.
-        </p>
+        {isToday && onRegenerate && (
+          <div className="p-4 border-t border-border/50 bg-gray-50/50 w-full">
+            <button
+              onClick={onRegenerate}
+              disabled={isGenerating || isBeforeUnlock}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
+                (isGenerating || isBeforeUnlock)
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+              )}
+            >
+              {isGenerating ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+                  Analyzing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Brain className="w-4 h-4" />
+                  Generate AI Insights
+                </span>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -139,7 +222,7 @@ export function AiAnalysisCard({ initialAnalysis, onRegenerate, isGenerating }: 
               ) : (
                 <span className="flex items-center gap-2">
                   <Brain className="w-4 h-4" />
-                  Regenerate Analysis
+                  Regenerate AI Insights
                 </span>
               )}
             </button>
@@ -270,14 +353,14 @@ export function AiAnalysisCard({ initialAnalysis, onRegenerate, isGenerating }: 
         )}
       </div>
 
-      {onRegenerate && (
+      {isToday && onRegenerate && (
         <div className="p-4 border-t border-border/50 bg-gray-50/50">
           <button
             onClick={onRegenerate}
-            disabled={isGenerating}
+            disabled={isGenerating || isBeforeUnlock}
             className={cn(
               "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
-              isGenerating 
+              (isGenerating || isBeforeUnlock)
                 ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                 : "bg-purple-100 text-purple-700 hover:bg-purple-200"
             )}
@@ -290,12 +373,17 @@ export function AiAnalysisCard({ initialAnalysis, onRegenerate, isGenerating }: 
             ) : (
               <span className="flex items-center gap-2">
                 <Brain className="w-4 h-4" />
-                Regenerate Analysis
+                Regenerate AI Insights
               </span>
             )}
           </button>
+          {isBeforeUnlock && (
+            <p className="text-[10px] text-muted-foreground text-center mt-2 italic">
+              Regeneration unlocks at 8:00 PM {remainingTimeStr ? `(${remainingTimeStr})` : ""}
+            </p>
+          )}
         </div>
       )}
     </div>
   );
-}
+});
